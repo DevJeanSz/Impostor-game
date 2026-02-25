@@ -34,22 +34,32 @@ export const CATEGORIES = [
 ];
 
 // Simple beep sound using Web Audio API
-export const playBeep = (context: AudioContext) => {
+export const playBeep = (context: AudioContext, timeLeft?: number) => {
   const oscillator = context.createOscillator();
   const gainNode = context.createGain();
 
   oscillator.connect(gainNode);
   gainNode.connect(context.destination);
 
-  oscillator.type = 'sine';
-  oscillator.frequency.setValueAtTime(880, context.currentTime); // A5
-  oscillator.frequency.exponentialRampToValueAtTime(440, context.currentTime + 0.1); 
-  
-  gainNode.gain.setValueAtTime(0.1, context.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.1);
+  // Rising pitch effect for countdown
+  // 5s: 880Hz
+  // 4s: 980Hz
+  // 3s: 1080Hz
+  // 2s: 1180Hz
+  // 1s: 1280Hz
+  const baseFreq = 880;
+  const freq = timeLeft ? baseFreq + ((5 - timeLeft) * 200) : baseFreq;
 
-  oscillator.start();
-  oscillator.stop(context.currentTime + 0.1);
+  oscillator.type = 'sine';
+  oscillator.frequency.setValueAtTime(freq, context.currentTime);
+  
+  // More distinct "pip" sound
+  gainNode.gain.setValueAtTime(0, context.currentTime);
+  gainNode.gain.linearRampToValueAtTime(0.3, context.currentTime + 0.02);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.15);
+
+  oscillator.start(context.currentTime);
+  oscillator.stop(context.currentTime + 0.15);
 };
 
 export const playAlarm = (context: AudioContext) => {

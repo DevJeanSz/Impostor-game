@@ -30,7 +30,7 @@ export function TimerScreen({ onFinish }: TimerScreenProps) {
           
           // Sound logic
           if (newValue <= 5 && newValue > 0 && audioContextRef.current) {
-            playBeep(audioContextRef.current);
+            playBeep(audioContextRef.current, newValue);
           } else if (newValue === 0 && audioContextRef.current) {
             playAlarm(audioContextRef.current);
           }
