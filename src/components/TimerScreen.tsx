@@ -66,13 +66,13 @@ export function TimerScreen({ onFinish }: TimerScreenProps) {
   const progress = (timeLeft / 120) * 100;
 
   return (
-    <div className="flex flex-col h-full max-w-md mx-auto p-6">
-      <div className="flex-none text-center space-y-2 mb-8">
-        <h2 className="text-3xl font-bold text-white">Debate</h2>
-        <p className="text-slate-400">Descubram quem é o impostor!</p>
-      </div>
+    <div className="flex flex-col h-full max-w-md mx-auto p-6 justify-center">
+      <div className="w-full flex flex-col items-center space-y-8 overflow-y-auto max-h-full py-4">
+        <div className="text-center space-y-2 shrink-0">
+          <h2 className="text-3xl font-bold text-white">Debate</h2>
+          <p className="text-slate-400">Descubram quem é o impostor!</p>
+        </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center overflow-y-auto min-h-0 space-y-8">
         <div className="relative flex items-center justify-center shrink-0">
           {/* Circular Progress Background */}
           <svg className="w-56 h-56 sm:w-64 sm:h-64 transform -rotate-90">
@@ -127,16 +127,16 @@ export function TimerScreen({ onFinish }: TimerScreenProps) {
             <RotateCcw size={24} />
           </button>
         </div>
-      </div>
 
-      <div className="pt-8 mt-auto flex-none">
-        <button
-          onClick={onFinish}
-          className="w-full bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-400 hover:to-orange-400 text-white font-bold py-4 rounded-2xl shadow-lg shadow-red-900/20 flex items-center justify-center gap-2 transition-all transform active:scale-95"
-        >
-          <CheckCircle2 size={20} />
-          Revelar Impostor
-        </button>
+        <div className="w-full pt-4 shrink-0">
+          <button
+            onClick={onFinish}
+            className="w-full bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-400 hover:to-orange-400 text-white font-bold py-4 rounded-2xl shadow-lg shadow-red-900/20 flex items-center justify-center gap-2 transition-all transform active:scale-95"
+          >
+            <CheckCircle2 size={20} />
+            Revelar Impostor
+          </button>
+        </div>
       </div>
     </div>
   );

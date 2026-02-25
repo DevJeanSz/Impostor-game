@@ -39,8 +39,8 @@ export function RevealScreen({ impostorName, secretWord, onPlayAgain }: RevealSc
   }, []);
 
   return (
-    <div className="flex flex-col h-full max-w-md mx-auto p-6">
-      <div className="flex-1 flex flex-col items-center justify-center overflow-y-auto min-h-0 space-y-8 text-center">
+    <div className="flex flex-col h-full max-w-md mx-auto p-6 justify-center">
+      <div className="w-full flex flex-col items-center space-y-8 overflow-y-auto max-h-full py-4 text-center">
         <div className="space-y-2 shrink-0">
           <h2 className="text-sm font-medium text-slate-400 uppercase tracking-widest">
             O Impostor era
@@ -63,16 +63,16 @@ export function RevealScreen({ impostorName, secretWord, onPlayAgain }: RevealSc
           <p className="text-sm text-slate-400 mb-2 uppercase tracking-wider">A Palavra Secreta</p>
           <p className="text-3xl font-bold text-indigo-400 break-words">{secretWord}</p>
         </div>
-      </div>
 
-      <div className="pt-8 mt-auto flex-none">
-        <button
-          onClick={onPlayAgain}
-          className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all"
-        >
-          <RotateCcw size={20} />
-          Jogar Novamente
-        </button>
+        <div className="w-full pt-4 shrink-0">
+          <button
+            onClick={onPlayAgain}
+            className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all"
+          >
+            <RotateCcw size={20} />
+            Jogar Novamente
+          </button>
+        </div>
       </div>
     </div>
   );
