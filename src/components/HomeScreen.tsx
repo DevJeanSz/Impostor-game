@@ -10,7 +10,7 @@ export function HomeScreen({ onSelectGame }: HomeScreenProps) {
   const games = [
     {
       id: 'impostor',
-      title: 'Impostor',
+      title: 'Los Priemos',
       description: 'Descubra quem está mentindo entre vocês.',
       icon: Ghost,
       color: 'bg-indigo-500',
@@ -46,7 +46,7 @@ export function HomeScreen({ onSelectGame }: HomeScreenProps) {
         <p className="text-slate-400">Escolha um jogo para começar</p>
       </div>
 
-      <div className="grid gap-4 overflow-y-auto pb-4">
+      <div className="grid gap-4 overflow-y-auto pb-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
         {games.map((game) => (
           <motion.button
             key={game.id}

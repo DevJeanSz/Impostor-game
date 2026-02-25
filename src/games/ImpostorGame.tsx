@@ -16,43 +16,99 @@ interface ImpostorGameProps {
 export function ImpostorGame({ onBack }: ImpostorGameProps) {
   const [gameState, setGameState] = useState<GameState>('setup');
   const [players, setPlayers] = useState<string[]>([]);
-  const [impostorIndex, setImpostorIndex] = useState<number>(0);
-  const [secretWord, setSecretWord] = useState<string>('');
-  const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
+  const [impostorIndices, setImpostorIndices] = useState<number[]>([]);
+  const [usedWords, setUsedWords] = useState<string[]>([]);
   const [startingPlayer, setStartingPlayer] = useState<string>('');
   const [pastImpostors, setPastImpostors] = useState<string[]>([]);
+  const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
+  const [secretWord, setSecretWord] = useState<string>('');
 
-  const startGame = (playerNames: string[], categoryId: string) => {
-    const category = CATEGORIES.find(c => c.id === categoryId) || CATEGORIES[0];
-    const word = category.words[Math.floor(Math.random() * category.words.length)];
-    
-    // Impostor rotation logic
-    let candidates = playerNames.filter(p => !pastImpostors.includes(p));
-    
-    // If everyone has been impostor, reset the pool
-    if (candidates.length === 0) {
-      candidates = playerNames;
-      setPastImpostors([]);
+  const startGame = (playerNames: string[], impostorCount: number) => {
+    try {
+      console.log("Starting game with:", { playerNames, impostorCount });
+
+      if (!CATEGORIES || CATEGORIES.length === 0) {
+        console.error("No categories found");
+        alert("Erro: Nenhuma categoria encontrada.");
+        return;
+      }
+
+      // Select random category
+      const randomCategory = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
+      console.log("Selected category:", randomCategory.name);
+      
+      // Filter out used words for this category if possible
+      const availableWords = randomCategory.words.filter(w => !usedWords.includes(w));
+      
+      // If all words used, reset pool for this category (or just pick random if really stuck)
+      const wordPool = availableWords.length > 0 ? availableWords : randomCategory.words;
+      const word = wordPool[Math.floor(Math.random() * wordPool.length)];
+      console.log("Selected word:", word);
+      
+      // Add to used words
+      setUsedWords(prev => [...prev, word]);
+      
+      // Impostor rotation logic - now supporting multiple impostors
+      // Ensure pastImpostors is defined
+      const currentPastImpostors = pastImpostors || [];
+      let candidates = playerNames.filter(p => !currentPastImpostors.includes(p));
+      let resetHistory = false;
+      
+      console.log("Candidates:", candidates);
+
+      // If not enough candidates for the requested impostor count, reset the pool
+      if (candidates.length < impostorCount) {
+        console.log("Not enough candidates, resetting history");
+        candidates = [...playerNames]; // Create a copy to be safe
+        resetHistory = true;
+      }
+      
+      // Select N unique impostors
+      const newImpostorIndices: number[] = [];
+      const newImpostorNames: string[] = [];
+      
+      // Create a copy of candidates to pick from
+      const availableCandidates = [...candidates];
+      
+      for (let i = 0; i < impostorCount; i++) {
+        if (availableCandidates.length === 0) break;
+        
+        const randomIndex = Math.floor(Math.random() * availableCandidates.length);
+        const impostorName = availableCandidates[randomIndex];
+        
+        // Remove selected candidate so they aren't picked again
+        availableCandidates.splice(randomIndex, 1);
+        
+        newImpostorNames.push(impostorName);
+        const idx = playerNames.indexOf(impostorName);
+        if (idx !== -1) {
+          newImpostorIndices.push(idx);
+        }
+      }
+      
+      console.log("New impostors:", newImpostorNames);
+
+      // Update past impostors
+      if (resetHistory) {
+        setPastImpostors(newImpostorNames);
+      } else {
+        setPastImpostors(prev => [...(prev || []), ...newImpostorNames]);
+      }
+
+      // Pick random starting player
+      const starter = playerNames[Math.floor(Math.random() * playerNames.length)];
+
+      setPlayers(playerNames);
+      setSecretWord(word);
+      setImpostorIndices(newImpostorIndices);
+      setStartingPlayer(starter);
+      setCurrentPlayerIndex(0);
+      setGameState('passing');
+      console.log("Game state set to passing");
+    } catch (error) {
+      console.error("Error starting game:", error);
+      alert("Ocorreu um erro ao iniciar o jogo. Tente novamente.");
     }
-    
-    const impostorName = candidates[Math.floor(Math.random() * candidates.length)];
-    const newImpostorIndex = playerNames.indexOf(impostorName);
-    
-    // Update past impostors
-    setPastImpostors(prev => {
-      const newHistory = candidates.length === playerNames.length ? [impostorName] : [...prev, impostorName];
-      return newHistory;
-    });
-
-    // Pick random starting player
-    const starter = playerNames[Math.floor(Math.random() * playerNames.length)];
-
-    setPlayers(playerNames);
-    setSecretWord(word);
-    setImpostorIndex(newImpostorIndex);
-    setStartingPlayer(starter);
-    setCurrentPlayerIndex(0);
-    setGameState('passing');
   };
 
   const handleNextPlayer = () => {
@@ -66,7 +122,7 @@ export function ImpostorGame({ onBack }: ImpostorGameProps) {
   const handlePlayAgain = () => {
     setGameState('setup');
     setSecretWord('');
-    setImpostorIndex(0);
+    setImpostorIndices([]);
     setCurrentPlayerIndex(0);
   };
 
@@ -104,7 +160,7 @@ export function ImpostorGame({ onBack }: ImpostorGameProps) {
           >
             <PassDeviceScreen
               currentPlayer={players[currentPlayerIndex]}
-              isImpostor={currentPlayerIndex === impostorIndex}
+              isImpostor={impostorIndices.includes(currentPlayerIndex)}
               secretWord={secretWord}
               onNext={handleNextPlayer}
               playerIndex={currentPlayerIndex}
@@ -137,7 +193,7 @@ export function ImpostorGame({ onBack }: ImpostorGameProps) {
             className="h-full"
           >
             <RevealScreen
-              impostorName={players[impostorIndex]}
+              impostorNames={impostorIndices.map(i => players[i])}
               secretWord={secretWord}
               onPlayAgain={handlePlayAgain}
             />

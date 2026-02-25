@@ -91,11 +91,13 @@ export function PassDeviceScreen({
                       </h3>
                     )}
                     
-                    <div className="py-4 border-t border-white/10 border-b">
-                      <p className="text-xs text-slate-400 mb-1 uppercase tracking-wider">Sua Palavra Secreta</p>
+                    <div className="py-6 border-t border-white/10 border-b bg-slate-900/50 rounded-xl my-2">
+                      <p className="text-xs text-slate-400 mb-2 uppercase tracking-wider font-bold">Sua Palavra Secreta</p>
                       <p className={cn(
-                        "text-2xl font-bold break-words",
-                        isImpostor ? "text-slate-500" : "text-white"
+                        "text-3xl sm:text-4xl font-black break-words tracking-tight",
+                        isImpostor 
+                          ? "text-red-500 animate-pulse" 
+                          : "text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-white to-cyan-300 drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]"
                       )}>
                         {isImpostor ? "???" : secretWord}
                       </p>

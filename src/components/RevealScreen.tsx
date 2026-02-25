@@ -4,12 +4,12 @@ import confetti from 'canvas-confetti';
 import { RotateCcw, User } from 'lucide-react';
 
 interface RevealScreenProps {
-  impostorName: string;
+  impostorNames: string[];
   secretWord: string;
   onPlayAgain: () => void;
 }
 
-export function RevealScreen({ impostorName, secretWord, onPlayAgain }: RevealScreenProps) {
+export function RevealScreen({ impostorNames, secretWord, onPlayAgain }: RevealScreenProps) {
   useEffect(() => {
     const duration = 3000;
     const end = Date.now() + duration;
@@ -43,7 +43,7 @@ export function RevealScreen({ impostorName, secretWord, onPlayAgain }: RevealSc
       <div className="w-full flex flex-col items-center space-y-8 overflow-y-auto max-h-full py-4 text-center">
         <div className="space-y-2 shrink-0">
           <h2 className="text-sm font-medium text-slate-400 uppercase tracking-widest">
-            O Impostor era
+            {impostorNames.length > 1 ? 'Os Impostores eram' : 'O Impostor era'}
           </h2>
           <motion.div
             initial={{ scale: 0.5, opacity: 0 }}
@@ -55,7 +55,11 @@ export function RevealScreen({ impostorName, secretWord, onPlayAgain }: RevealSc
             <div className="relative w-32 h-32 mx-auto bg-gradient-to-br from-red-500 to-orange-600 rounded-full flex items-center justify-center shadow-2xl shadow-red-900/50 mb-6">
               <User size={64} className="text-white" />
             </div>
-            <h1 className="text-4xl font-bold text-white mb-2 break-words">{impostorName}</h1>
+            <div className="space-y-2">
+              {impostorNames.map((name, index) => (
+                <h1 key={index} className="text-4xl font-bold text-white break-words">{name}</h1>
+              ))}
+            </div>
           </motion.div>
         </div>
 

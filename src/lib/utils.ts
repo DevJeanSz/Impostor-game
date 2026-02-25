@@ -1,37 +1,12 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { CATEGORIES } from "../data/categories";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const CATEGORIES = [
-  {
-    id: 'animals',
-    name: 'Animais',
-    words: ['Leão', 'Elefante', 'Girafa', 'Macaco', 'Cachorro', 'Gato', 'Pinguim', 'Tubarão', 'Águia', 'Cobra']
-  },
-  {
-    id: 'food',
-    name: 'Comida',
-    words: ['Pizza', 'Hambúrguer', 'Sushi', 'Sorvete', 'Chocolate', 'Salada', 'Macarrão', 'Churrasco', 'Taco', 'Bolo']
-  },
-  {
-    id: 'places',
-    name: 'Lugares',
-    words: ['Praia', 'Escola', 'Hospital', 'Cinema', 'Parque', 'Shopping', 'Aeroporto', 'Biblioteca', 'Academia', 'Restaurante']
-  },
-  {
-    id: 'objects',
-    name: 'Objetos',
-    words: ['Cadeira', 'Mesa', 'Computador', 'Celular', 'Caneta', 'Relógio', 'Livro', 'Garrafa', 'Mochila', 'Óculos']
-  },
-  {
-    id: 'jobs',
-    name: 'Profissões',
-    words: ['Médico', 'Professor', 'Policial', 'Bombeiro', 'Advogado', 'Engenheiro', 'Artista', 'Chef', 'Astronauta', 'Veterinário']
-  }
-];
+export { CATEGORIES };
 
 // Simple beep sound using Web Audio API
 export const playBeep = (context: AudioContext, timeLeft?: number) => {
@@ -41,40 +16,46 @@ export const playBeep = (context: AudioContext, timeLeft?: number) => {
   oscillator.connect(gainNode);
   gainNode.connect(context.destination);
 
+  // Sharper, more urgent beep
   // Rising pitch effect for countdown
-  // 5s: 880Hz
-  // 4s: 980Hz
-  // 3s: 1080Hz
-  // 2s: 1180Hz
-  // 1s: 1280Hz
   const baseFreq = 880;
-  const freq = timeLeft ? baseFreq + ((5 - timeLeft) * 200) : baseFreq;
+  const freq = timeLeft ? baseFreq + ((5 - timeLeft) * 300) : baseFreq;
 
-  oscillator.type = 'sine';
+  oscillator.type = 'square'; // Changed to square for more "bite"
   oscillator.frequency.setValueAtTime(freq, context.currentTime);
   
-  // More distinct "pip" sound
+  // Louder, shorter envelope
   gainNode.gain.setValueAtTime(0, context.currentTime);
-  gainNode.gain.linearRampToValueAtTime(0.3, context.currentTime + 0.02);
-  gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.15);
+  gainNode.gain.linearRampToValueAtTime(0.5, context.currentTime + 0.01);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.1);
 
   oscillator.start(context.currentTime);
-  oscillator.stop(context.currentTime + 0.15);
+  oscillator.stop(context.currentTime + 0.1);
 };
 
 export const playAlarm = (context: AudioContext) => {
   const oscillator = context.createOscillator();
   const gainNode = context.createGain();
+  const lfo = context.createOscillator(); // Low Frequency Oscillator for siren effect
 
+  lfo.connect(oscillator.frequency);
   oscillator.connect(gainNode);
   gainNode.connect(context.destination);
 
-  oscillator.type = 'square';
-  oscillator.frequency.setValueAtTime(440, context.currentTime);
+  // Siren effect
+  oscillator.type = 'sawtooth'; // Sawtooth is very harsh/loud
+  oscillator.frequency.setValueAtTime(600, context.currentTime);
   
-  gainNode.gain.setValueAtTime(0.1, context.currentTime);
-  gainNode.gain.linearRampToValueAtTime(0.001, context.currentTime + 0.5);
+  lfo.type = 'sine';
+  lfo.frequency.setValueAtTime(8, context.currentTime); // 8Hz wobble
+  lfo.start();
+
+  // Volume envelope
+  gainNode.gain.setValueAtTime(0.5, context.currentTime);
+  gainNode.gain.linearRampToValueAtTime(0.5, context.currentTime + 1.5);
+  gainNode.gain.linearRampToValueAtTime(0.001, context.currentTime + 2.0);
 
   oscillator.start();
-  oscillator.stop(context.currentTime + 0.5);
+  oscillator.stop(context.currentTime + 2.0);
+  lfo.stop(context.currentTime + 2.0);
 };

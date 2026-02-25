@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, User, Play, Trash2 } from 'lucide-react';
+import { Plus, X, User, Play, Trash2, Minus } from 'lucide-react';
 import { cn, CATEGORIES } from '../lib/utils';
 
 interface SetupScreenProps {
-  onStartGame: (players: string[], categoryId: string) => void;
+  onStartGame: (players: string[], impostorCount: number) => void;
 }
 
 export function SetupScreen({ onStartGame }: SetupScreenProps) {
   const [players, setPlayers] = useState<string[]>([]);
   const [newName, setNewName] = useState('');
+  const [impostorCount, setImpostorCount] = useState(1);
 
   const [showConfirmClear, setShowConfirmClear] = useState(false);
-
+  
   // Load players from localStorage on mount
   useEffect(() => {
     const savedPlayers = localStorage.getItem('impostor_players');
@@ -55,18 +56,30 @@ export function SetupScreen({ onStartGame }: SetupScreenProps) {
   };
 
   const handleStart = () => {
+    console.log("handleStart called", { playersLength: players.length, impostorCount });
     if (players.length >= 3) {
-      const randomCategory = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
-      onStartGame(players, randomCategory.id);
+      onStartGame(players, impostorCount);
+    } else {
+      console.warn("Not enough players to start");
     }
   };
 
+  const maxImpostors = Math.max(1, Math.floor((players.length - 1) / 2));
+
+  // Ensure impostor count is valid when players change
+  useEffect(() => {
+    if (impostorCount > maxImpostors) {
+      setImpostorCount(maxImpostors);
+    }
+  }, [players.length, maxImpostors, impostorCount]);
+
   return (
     <div className="flex flex-col h-full max-w-md mx-auto p-6 justify-center">
-      <div className="w-full flex flex-col items-center space-y-8 overflow-y-auto max-h-full py-4">
+      {/* ... header ... */}
+      <div className="w-full flex flex-col items-center space-y-8 overflow-y-auto max-h-full py-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
         <div className="text-center space-y-2 shrink-0">
           <h1 className="text-4xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
-            Impostor
+            Los Priemos
           </h1>
           <p className="text-slate-400">Quem está mentindo?</p>
           <p className="text-xs text-slate-500 max-w-xs mx-auto pt-2">
@@ -75,6 +88,7 @@ export function SetupScreen({ onStartGame }: SetupScreenProps) {
         </div>
 
         <div className="w-full space-y-4 shrink-0">
+          {/* ... player list ... */}
           <div className="flex items-center justify-between h-6">
             <label className="text-sm font-medium text-slate-300 uppercase tracking-wider">
               Participantes ({players.length})
@@ -155,6 +169,36 @@ export function SetupScreen({ onStartGame }: SetupScreenProps) {
             )}
           </div>
         </div>
+
+        {players.length >= 4 && (
+          <div className="w-full space-y-2 shrink-0">
+            <label className="text-sm font-medium text-slate-300 uppercase tracking-wider">
+              Quantidade de Impostores
+            </label>
+            <div className="flex items-center gap-4 bg-slate-800 p-2 rounded-xl border border-slate-700">
+              <button
+                onClick={() => setImpostorCount(Math.max(1, impostorCount - 1))}
+                disabled={impostorCount <= 1}
+                className="p-2 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <Minus size={20} />
+              </button>
+              <span className="flex-1 text-center font-bold text-xl text-white">
+                {impostorCount}
+              </span>
+              <button
+                onClick={() => setImpostorCount(Math.min(maxImpostors, impostorCount + 1))}
+                disabled={impostorCount >= maxImpostors}
+                className="p-2 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 text-center">
+              Recomendado: {Math.floor(players.length / 4) || 1}
+            </p>
+          </div>
+        )}
 
         <div className="w-full pt-4 shrink-0">
           <button

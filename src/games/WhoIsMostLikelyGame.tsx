@@ -1,33 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, RefreshCw, ChevronRight } from 'lucide-react';
+import { QUESTIONS } from '../data/questions';
 
 interface WhoIsMostLikelyGameProps {
   onBack: () => void;
 }
-
-const QUESTIONS = [
-  "Quem é mais provável de sobreviver a um apocalipse zumbi?",
-  "Quem é mais provável de ficar rico por acidente?",
-  "Quem é mais provável de chorar em um filme de comédia?",
-  "Quem é mais provável de esquecer o próprio aniversário?",
-  "Quem é mais provável de ser preso por algo estúpido?",
-  "Quem é mais provável de virar um meme?",
-  "Quem é mais provável de gastar todo o salário no primeiro dia?",
-  "Quem é mais provável de tropeçar no nada?",
-  "Quem é mais provável de adotar 10 gatos?",
-  "Quem é mais provável de sumir em uma festa?",
-  "Quem é mais provável de rir em um momento sério?",
-  "Quem é mais provável de bloquear o ex e desbloquear 5 minutos depois?",
-  "Quem é mais provável de comer a comida de outra pessoa na geladeira?",
-  "Quem é mais provável de ganhar um reality show?",
-  "Quem é mais provável de casar com um estranho em Las Vegas?",
-  "Quem é mais provável de gritar ao ver uma barata?",
-  "Quem é mais provável de perder o celular segurando ele?",
-  "Quem é mais provável de dormir no ônibus e perder o ponto?",
-  "Quem é mais provável de fazer drama por um corte de papel?",
-  "Quem é mais provável de enviar um print para a pessoa de quem tirou o print?"
-];
 
 export function WhoIsMostLikelyGame({ onBack }: WhoIsMostLikelyGameProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
