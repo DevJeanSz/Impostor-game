@@ -1,0 +1,5 @@
+{
+  "name": "Impostor Game",
+  "description": "A social deduction game where players pass the device to find out who is the impostor.",
+  "requestFramePermissions": []
+}
