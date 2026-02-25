@@ -85,12 +85,11 @@ export function PassDeviceScreen({
                   </div>
                   
                   <div className="space-y-4 flex-1 flex flex-col justify-center w-full">
-                    <h3 className={cn(
-                      "text-xl font-bold uppercase tracking-widest",
-                      isImpostor ? "text-red-400" : "text-indigo-400"
-                    )}>
-                      {isImpostor ? "IMPOSTOR" : "CIDADÃO"}
-                    </h3>
+                    {isImpostor && (
+                      <h3 className="text-xl font-bold uppercase tracking-widest text-red-400">
+                        IMPOSTOR
+                      </h3>
+                    )}
                     
                     <div className="py-4 border-t border-white/10 border-b">
                       <p className="text-xs text-slate-400 mb-1 uppercase tracking-wider">Sua Palavra Secreta</p>
@@ -109,16 +108,16 @@ export function PassDeviceScreen({
                     )}
                   </div>
 
-                  <button
-                    onClick={onNext}
-                    className="mt-auto w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-3 rounded-xl flex items-center justify-center gap-2 transition-colors text-sm"
-                  >
-                    <span>Entendi</span>
-                    <ArrowRight size={16} />
-                  </button>
-                </div>
-              </motion.div>
-            )}
+                <button
+                  onClick={onNext}
+                  className="mt-auto w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-3 rounded-xl flex items-center justify-center gap-2 transition-colors text-sm"
+                >
+                  <span>Entendi</span>
+                  <ArrowRight size={16} />
+                </button>
+              </div>
+            </motion.div>
+          )}
           </AnimatePresence>
         </div>
       </div>
