@@ -177,17 +177,17 @@ export function SetupScreen({ onStartGame }: SetupScreenProps) {
             ))}
           </div>
         </div>
-      </div>
 
-      <div className="pt-4 mt-auto">
-        <button
-          onClick={handleStart}
-          disabled={players.length < 3}
-          className="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-400 hover:to-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2 transition-all transform active:scale-95"
-        >
-          <Play size={20} fill="currentColor" />
-          Iniciar Jogo
-        </button>
+        <div className="pt-4">
+          <button
+            onClick={handleStart}
+            disabled={players.length < 3}
+            className="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-400 hover:to-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2 transition-all transform active:scale-95"
+          >
+            <Play size={20} fill="currentColor" />
+            Iniciar Jogo
+          </button>
+        </div>
       </div>
     </div>
   );
