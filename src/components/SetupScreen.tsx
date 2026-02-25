@@ -10,7 +10,6 @@ interface SetupScreenProps {
 export function SetupScreen({ onStartGame }: SetupScreenProps) {
   const [players, setPlayers] = useState<string[]>([]);
   const [newName, setNewName] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0].id);
 
   const [showConfirmClear, setShowConfirmClear] = useState(false);
 
@@ -57,24 +56,25 @@ export function SetupScreen({ onStartGame }: SetupScreenProps) {
 
   const handleStart = () => {
     if (players.length >= 3) {
-      onStartGame(players, selectedCategory);
+      const randomCategory = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
+      onStartGame(players, randomCategory.id);
     }
   };
 
   return (
-    <div className="flex flex-col h-full max-w-md mx-auto p-6">
-      <div className="flex-1 overflow-y-auto space-y-6 pb-4">
-        <div className="text-center space-y-2">
+    <div className="flex flex-col h-full max-w-md mx-auto p-6 justify-center">
+      <div className="w-full flex flex-col items-center space-y-8 overflow-y-auto max-h-full py-4">
+        <div className="text-center space-y-2 shrink-0">
           <h1 className="text-4xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
             Impostor
           </h1>
           <p className="text-slate-400">Quem está mentindo?</p>
           <p className="text-xs text-slate-500 max-w-xs mx-auto pt-2">
-            Adicione os jogadores, escolha uma categoria e passem o dispositivo.
+            Adicione os jogadores e passem o dispositivo. A categoria será secreta!
           </p>
         </div>
 
-        <div className="space-y-4">
+        <div className="w-full space-y-4 shrink-0">
           <div className="flex items-center justify-between h-6">
             <label className="text-sm font-medium text-slate-300 uppercase tracking-wider">
               Participantes ({players.length})
@@ -156,29 +156,7 @@ export function SetupScreen({ onStartGame }: SetupScreenProps) {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <label className="text-sm font-medium text-slate-300 uppercase tracking-wider">
-            Categoria
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={cn(
-                  "px-3 py-3 rounded-xl text-sm font-medium transition-all border",
-                  selectedCategory === cat.id
-                    ? "bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-900/20"
-                    : "bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-750 hover:border-slate-600"
-                )}
-              >
-                {cat.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="pt-4">
+        <div className="w-full pt-4 shrink-0">
           <button
             onClick={handleStart}
             disabled={players.length < 3}
