@@ -59,17 +59,108 @@ export function DominoGame({ onBack }: DominoGameProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPiece, setSelectedPiece] = useState<DominoPiece | null>(null);
   
-  // Responsive pieces per row for Snake Layout
-  const [piecesPerRow, setPiecesPerRow] = useState(12);
+  // Layout Constants
+  const PIECE_WIDTH = 60;  // Reduced size for better fit
+  const PIECE_HEIGHT = 30;
+  const GAP = 4;
 
-  React.useEffect(() => {
-    const handleResize = () => {
-      setPiecesPerRow(window.innerWidth < 768 ? 6 : 12);
-    };
-    handleResize(); // Init
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  const [layoutPieces, setLayoutPieces] = useState<any[]>([]);
+  const [boardHeight, setBoardHeight] = useState(400);
+  const [zonePositions, setZonePositions] = useState<{left: any, right: any}>({ left: {}, right: {} });
+
+  // Calculate Snake Layout
+  useEffect(() => {
+    if (!room) return;
+    
+    const containerWidth = Math.min(window.innerWidth - 32, 800); // Max width 800px
+    const pieces = room.board || [];
+    const newLayout: any[] = [];
+    
+    // If empty board
+    if (pieces.length === 0) {
+       setZonePositions({ 
+         left: { left: '50%', top: '50%', transform: 'translate(-150%, -50%)' }, 
+         right: { left: '50%', top: '50%', transform: 'translate(50%, -50%)' } 
+       });
+       setLayoutPieces([]);
+       return;
+    }
+    
+    let x = 80; // Start padding (space for left zone)
+    let y = 60;
+    let dir = 1; // 1 = Right, -1 = Left
+    let maxX = containerWidth - 80;
+    let minX = 40;
+
+    // Left Zone Position
+    const leftZone = { left: x - 70, top: y };
+
+    for (let i = 0; i < pieces.length; i++) {
+      const piece = pieces[i];
+      const isDouble = piece.piece.left === piece.piece.right;
+      
+      let width = isDouble ? PIECE_HEIGHT : PIECE_WIDTH; 
+      let height = isDouble ? PIECE_WIDTH : PIECE_HEIGHT;
+      
+      // Check bounds
+      const nextX = x + ((width + GAP) * dir);
+      
+      let isTurn = false;
+      if (dir === 1 && nextX > maxX) isTurn = true;
+      if (dir === -1 && nextX < minX) isTurn = true;
+
+      if (isTurn) {
+        const turnX = x + (dir === 1 ? -10 : 10); 
+        const turnY = y + 20; 
+        
+        newLayout.push({
+          ...piece,
+          style: {
+            left: turnX,
+            top: turnY,
+            transform: 'rotate(0deg)', 
+            zIndex: i
+          },
+          isVertical: true
+        });
+        
+        y += 60; 
+        dir *= -1; 
+        x = turnX; 
+        
+      } else {
+        const isVertical = isDouble; 
+        
+        newLayout.push({
+          ...piece,
+          style: {
+            left: x,
+            top: y,
+            transform: isVertical ? 'rotate(0deg)' : 'rotate(90deg)',
+            zIndex: i
+          },
+          isVertical
+        });
+        
+        const advance = isVertical ? 30 : 55; 
+        x += advance * dir;
+      }
+    }
+    
+    // Right Zone Position (at the end of the chain)
+    // We need to adjust based on the last piece's orientation/position
+    // x is already advanced to the "next" position.
+    // But if the last piece was a turn, x is at the turn.
+    // If the last piece was horizontal, x is after it.
+    
+    const rightZone = { left: x + (dir === 1 ? 10 : -70), top: y };
+    
+    setLayoutPieces(newLayout);
+    setZonePositions({ left: leftZone, right: rightZone });
+    setBoardHeight(y + 150);
+
+  }, [room?.board, window.innerWidth]);
+
 
   const renderZone = (side: 'left' | 'right') => {
     const isLeft = side === 'left';
@@ -1126,66 +1217,74 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   </div>
                 ) : (
                   <div className="w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center justify-center p-4">
-                    {/* Snake Layout Container */}
-                    <div className="flex flex-col items-center justify-center w-full max-w-4xl">
-                      {(() => {
-                        const allItems = [
-                          { type: 'zone', side: 'left' },
-                          ...room.board.map(b => ({ type: 'piece', data: b })),
-                          { type: 'zone', side: 'right' }
-                        ];
-                        
-                        const rows = [];
-                        for (let i = 0; i < allItems.length; i += piecesPerRow) {
-                          rows.push(allItems.slice(i, i + piecesPerRow));
-                        }
-
-                        return rows.map((row, rowIndex) => (
-                          <div 
-                            key={rowIndex} 
-                            className={cn(
-                              "flex items-center w-full",
-                              rows.length === 1 ? "justify-center" : "justify-start",
-                              rowIndex % 2 === 1 ? "flex-row-reverse" : "flex-row",
-                              rowIndex > 0 && "-mt-[1px]" // Overlap vertically
-                            )}
+                    {/* Absolute Layout Container */}
+                    <div className="relative w-full overflow-hidden bg-[#11301c] rounded-xl shadow-inner transition-all duration-300" style={{ height: boardHeight }}>
+                       {layoutPieces.map((item, index) => (
+                          <motion.div
+                            key={index}
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            className="absolute origin-center"
+                            style={item.style}
                           >
-                            {row.map((item, colIndex) => {
-                               if (item.type === 'zone') {
-                                 // @ts-ignore
-                                 return <React.Fragment key={`zone-${item.side}`}>{renderZone(item.side)}</React.Fragment>;
-                               }
-                               return (
-                                 <motion.div
-                                   // @ts-ignore
-                                   key={`piece-${rowIndex}-${colIndex}`}
-                                   initial={{ scale: 0 }}
-                                   animate={{ scale: 1 }}
-                                   className="flex-shrink-0 -ml-[1px] relative z-10"
-                                 >
-                                   {/* @ts-ignore */}
-                                   {renderPiece(item.data.piece, true, item.data.orientation)}
-                                 </motion.div>
-                               );
-                            })}
-                          </div>
-                        ));
-                      })()}
+                            {renderPiece(item.piece, true, item.isVertical ? 'vertical' : 'horizontal')}
+                          </motion.div>
+                       ))}
+                       
+                       {/* Drop Zones */}
+                       <div className="absolute transition-all duration-300" style={zonePositions.left}>
+                          {renderZone('left')}
+                       </div>
+                       <div className="absolute transition-all duration-300" style={zonePositions.right}>
+                          {renderZone('right')}
+                       </div>
                     </div>
                   </div>
                 )}
                 
-                {/* Opponents Hands */}
-                <div className="absolute top-2 right-2 flex gap-2">
-                  {room.players.filter(p => p.id !== playerId).map(p => (
-                    <div key={p.id} className="bg-black/60 p-2 rounded-lg border border-white/10 text-xs text-center backdrop-blur-sm">
-                      <div className="font-bold text-[#f0d0a0]">{p.name}</div>
-                      <div className="text-white flex items-center justify-center gap-1">
-                        <div className="w-3 h-4 bg-white/20 rounded-sm"></div>
-                        {p.hand?.length || 0}
+                {/* Opponents Hands & Status */}
+                <div className="absolute top-4 left-0 right-0 px-4 flex justify-between items-start pointer-events-none z-20">
+                  {/* Left: Room Info */}
+                  <div className="bg-black/40 p-2 rounded-lg backdrop-blur-sm pointer-events-auto border border-white/10">
+                    <div className="text-[10px] text-white/60 uppercase tracking-wider">Sala</div>
+                    <div className="font-mono font-bold text-[#f0d0a0] text-sm">{room.id}</div>
+                  </div>
+
+                  {/* Center: Opponents */}
+                  <div className="flex gap-4 pointer-events-auto">
+                    {room.players.filter(p => p.id !== playerId).map(p => (
+                      <div key={p.id} className={cn(
+                        "flex flex-col items-center p-2 rounded-lg transition-all backdrop-blur-md",
+                        room.players[room.currentTurnIndex].id === p.id ? "bg-[#f0d0a0]/20 scale-110 border border-[#f0d0a0]/50 shadow-[0_0_15px_rgba(240,208,160,0.3)]" : "bg-black/40 border border-white/10"
+                      )}>
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center border border-white/20 mb-1 shadow-lg relative">
+                           <span className="text-xs font-bold text-white tracking-wider">{p.name.substring(0, 2).toUpperCase()}</span>
+                           {room.players[room.currentTurnIndex].id === p.id && (
+                             <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-gray-900 animate-pulse" />
+                           )}
+                        </div>
+                        <div className="text-xs text-white font-medium drop-shadow-md">{p.name}</div>
+                        <div className="flex items-center gap-1 mt-1 bg-black/50 px-2 py-0.5 rounded-full border border-white/5">
+                          <div className="w-2 h-3 bg-white/40 rounded-[1px]"></div>
+                          <span className="text-xs font-mono text-[#f0d0a0]">{p.hand?.length || 0}</span>
+                        </div>
+                        {room.players[room.currentTurnIndex].id === p.id && (
+                           <div className="text-[10px] text-[#f0d0a0] animate-pulse mt-1 font-bold tracking-wide">JOGANDO...</div>
+                        )}
                       </div>
+                    ))}
+                  </div>
+
+                  {/* Right: Timer */}
+                  <div className={cn(
+                    "p-2 rounded-lg backdrop-blur-sm transition-all pointer-events-auto border",
+                    timeLeft < 10 ? "bg-red-500/20 border-red-500/50 animate-pulse" : "bg-black/40 border-white/10"
+                  )}>
+                    <div className="text-[10px] text-white/60 text-center uppercase tracking-wider">Tempo</div>
+                    <div className={cn("font-mono font-bold text-center text-sm", timeLeft < 10 ? "text-red-400" : "text-white")}>
+                      {timeLeft}s
                     </div>
-                  ))}
+                  </div>
                 </div>
               </div>
 
