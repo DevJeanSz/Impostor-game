@@ -35,6 +35,7 @@ interface GameRoom {
   rightEnd: number | null;
   winner?: Player;
   lastAction?: string;
+  consecutivePasses: number;
 }
 
 export function DominoGame({ onBack }: DominoGameProps) {
@@ -123,7 +124,8 @@ export function DominoGame({ onBack }: DominoGameProps) {
       drawPile: [],
       currentTurnIndex: 0,
       leftEnd: null,
-      rightEnd: null
+      rightEnd: null,
+      consecutivePasses: 0
     };
 
     try {
@@ -235,13 +237,20 @@ export function DominoGame({ onBack }: DominoGameProps) {
       currentTurnIndex: startIndex,
       leftEnd: null,
       rightEnd: null,
-      lastAction: 'Jogo iniciado!'
+      lastAction: 'Jogo iniciado!',
+      consecutivePasses: 0
     });
   };
 
   const buyPiece = async () => {
     if (!room) return;
     
+    // Only allowed if piecesPerPlayer is 3
+    if (room.config.piecesPerPlayer !== 3) {
+      setError('Compra não permitida nesta modalidade!');
+      return;
+    }
+
     // Optimistic check
     const playerIndex = room.players.findIndex(p => p.id === playerId);
     if (playerIndex === -1 || room.currentTurnIndex !== playerIndex) return;
@@ -274,19 +283,42 @@ export function DominoGame({ onBack }: DominoGameProps) {
     const playerIndex = room.players.findIndex(p => p.id === playerId);
     if (playerIndex === -1 || room.currentTurnIndex !== playerIndex) return;
 
-    // Only allow pass if draw pile is empty (or rule variant)
-    // Brazilian rule: must buy until you can play. If pile empty, then pass.
-    if (room.drawPile && room.drawPile.length > 0) {
+    // Rule: must buy until you can play IF piecesPerPlayer is 3 and pile not empty
+    if (room.config.piecesPerPlayer === 3 && room.drawPile && room.drawPile.length > 0) {
       setError('Você deve comprar peças!');
       return;
     }
 
     const nextTurn = (room.currentTurnIndex + 1) % room.players.length;
+    const newConsecutivePasses = (room.consecutivePasses || 0) + 1;
     
-    await update(ref(database, `rooms/${room.id}`), {
+    let updates: any = {
       currentTurnIndex: nextTurn,
-      lastAction: `${room.players[playerIndex].name} passou a vez.`
-    });
+      lastAction: `${room.players[playerIndex].name} passou a vez.`,
+      consecutivePasses: newConsecutivePasses
+    };
+
+    // Check if game is blocked (everyone passed)
+    if (newConsecutivePasses >= room.players.length) {
+      updates.status = 'finished';
+      
+      // Calculate winner by lowest points
+      let minPoints = Infinity;
+      let winner = null;
+      
+      room.players.forEach(p => {
+        const points = (p.hand || []).reduce((sum, piece) => sum + piece.left + piece.right, 0);
+        if (points < minPoints) {
+          minPoints = points;
+          winner = p;
+        }
+      });
+      
+      updates.winner = winner;
+      updates.lastAction = `Jogo travado! ${winner?.name} venceu com menos pontos.`;
+    }
+    
+    await update(ref(database, `rooms/${room.id}`), updates);
   };
 
   const playPiece = async (piece: DominoPiece, side: 'left' | 'right') => {
@@ -363,7 +395,8 @@ export function DominoGame({ onBack }: DominoGameProps) {
       leftEnd: newLeftEnd,
       rightEnd: newRightEnd,
       currentTurnIndex: (room.currentTurnIndex + 1) % room.players.length,
-      lastAction: `${player.name} jogou [${playedPiece.left}|${playedPiece.right}]`
+      lastAction: `${player.name} jogou [${playedPiece.left}|${playedPiece.right}]`,
+      consecutivePasses: 0 // Reset pass counter on successful play
     };
 
     if (newHand.length === 0) {
@@ -427,8 +460,8 @@ export function DominoGame({ onBack }: DominoGameProps) {
           <div key={i} className="flex items-center justify-center">
             {positions.includes(i) && (
               <div className={cn(
-                "rounded-full bg-black shadow-inner",
-                isSmall ? "w-1 h-1" : "w-2 h-2"
+                "rounded-full bg-black",
+                isSmall ? "w-1 h-1" : "w-1.5 h-1.5"
               )} />
             )}
           </div>
@@ -440,19 +473,15 @@ export function DominoGame({ onBack }: DominoGameProps) {
   const renderPiece = (piece: DominoPiece, isSmall = false, rotation = 0) => (
     <div 
       className={cn(
-        "relative bg-[#f0f0f0] rounded-md flex flex-col items-center justify-between select-none overflow-hidden",
-        "shadow-[2px_3px_0px_0px_#b0b0b0] border border-slate-300", // 3D effect
-        isSmall ? "w-6 h-12" : "w-10 h-20"
+        "relative bg-white rounded flex flex-col items-center justify-between select-none overflow-hidden border border-slate-400",
+        isSmall ? "w-6 h-12" : "w-12 h-24"
       )}
       style={{ transform: `rotate(${rotation}deg)` }}
     >
-      {/* Highlight/Glare */}
-      <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/80 to-transparent pointer-events-none" />
-      
       <div className="flex-1 w-full flex items-center justify-center">
         {renderDots(piece.left, isSmall)}
       </div>
-      <div className="w-full h-[1px] bg-slate-400 shadow-[0px_1px_0px_rgba(255,255,255,0.5)]"></div>
+      <div className="w-full h-[1px] bg-slate-400"></div>
       <div className="flex-1 w-full flex items-center justify-center">
         {renderDots(piece.right, isSmall)}
       </div>
@@ -476,7 +505,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
 
   const isMyTurn = room?.players[room.currentTurnIndex]?.id === playerId;
   const hasValidMove = canPlay();
-  const canBuy = room?.drawPile && room.drawPile.length > 0;
+  const canBuy = room?.config.piecesPerPlayer === 3 && room?.drawPile && room.drawPile.length > 0;
 
   return (
     <div className="h-full flex flex-col relative bg-[#1a472a] text-slate-50 overflow-hidden font-sans">
@@ -525,7 +554,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   <div className="space-y-2">
                     <label className="text-xs text-green-300 font-bold uppercase">Pedras Iniciais</label>
                     <div className="flex bg-black/30 rounded-xl p-1 border border-green-800">
-                      {[6, 7].map(num => (
+                      {[3, 6, 7].map(num => (
                         <button
                           key={num}
                           onClick={() => setPiecesConfig(num)}
