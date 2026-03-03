@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { io, Socket } from 'socket.io-client';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Copy, Users, Play, GripHorizontal, Share2 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { database } from '../lib/firebase';
+import { ref, set, onValue, update, get, child, push, runTransaction } from 'firebase/database';
 
 interface DominoGameProps {
   onBack: () => void;
@@ -27,16 +28,33 @@ interface GameRoom {
   config: {
     piecesPerPlayer: number;
   };
+  board: { piece: DominoPiece; ownerId: string }[];
+  currentTurnIndex: number;
+  leftEnd: number | null;
+  rightEnd: number | null;
+  winner?: Player;
 }
 
 export function DominoGame({ onBack }: DominoGameProps) {
-  const [socket, setSocket] = useState<Socket | null>(null);
   const [view, setView] = useState<'menu' | 'lobby' | 'game'>('menu');
   const [room, setRoom] = useState<GameRoom | null>(null);
-  const [playerName, setPlayerName] = useState('');
+  const [playerName, setPlayerName] = useState(() => localStorage.getItem('domino_player_name') || '');
   const [roomIdInput, setRoomIdInput] = useState('');
-  const [piecesConfig, setPiecesConfig] = useState(6); // Default to 6 as requested
+  const [piecesConfig, setPiecesConfig] = useState(6);
   const [error, setError] = useState('');
+  const [playerId, setPlayerId] = useState(() => {
+    const stored = localStorage.getItem('domino_player_id');
+    if (stored) return stored;
+    const newId = Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('domino_player_id', newId);
+    return newId;
+  });
+
+  useEffect(() => {
+    if (playerName) {
+      localStorage.setItem('domino_player_name', playerName);
+    }
+  }, [playerName]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -44,60 +62,242 @@ export function DominoGame({ onBack }: DominoGameProps) {
     if (roomParam) {
       setRoomIdInput(roomParam);
     }
-
-    const newSocket = io();
-    setSocket(newSocket);
-
-    newSocket.on('room_created', (id) => {
-      // Room created, waiting for update_room to set state
-    });
-
-    newSocket.on('update_room', (updatedRoom) => {
-      setRoom(updatedRoom);
-      setView('lobby');
-    });
-
-    newSocket.on('game_started', (updatedRoom) => {
-      setRoom(updatedRoom);
-      setView('game');
-    });
-
-    newSocket.on('error', (msg) => {
-      setError(msg);
-      setTimeout(() => setError(''), 3000);
-    });
-
-    return () => {
-      newSocket.disconnect();
-    };
   }, []);
 
-  const createRoom = () => {
+  // Listen for room updates
+  useEffect(() => {
+    if (!room?.id) return;
+
+    const roomRef = ref(database, `rooms/${room.id}`);
+    const unsubscribe = onValue(roomRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        setRoom(data);
+        if (data.status === 'playing' && view !== 'game') {
+          setView('game');
+        } else if (data.status === 'waiting' && view !== 'lobby') {
+            setView('lobby');
+        }
+      } else {
+        // Room deleted or doesn't exist
+        setRoom(null);
+        setView('menu');
+        setError('Sala encerrada ou não encontrada.');
+      }
+    });
+
+    return () => unsubscribe();
+  }, [room?.id, view]);
+
+  const generateRoomId = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 4; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
+
+  const createRoom = async () => {
     if (!playerName) {
       setError('Digite seu nome');
       return;
     }
-    socket?.emit('create_room', { name: playerName, piecesPerPlayer: piecesConfig });
+
+    const newRoomId = generateRoomId();
+    const newRoom: GameRoom = {
+      id: newRoomId,
+      players: [{
+        id: playerId,
+        name: playerName,
+        hand: [],
+        score: 0
+      }],
+      status: 'waiting',
+      config: {
+        piecesPerPlayer: piecesConfig
+      },
+      board: [],
+      currentTurnIndex: 0,
+      leftEnd: null,
+      rightEnd: null
+    };
+
+    try {
+      await set(ref(database, `rooms/${newRoomId}`), newRoom);
+      setRoom(newRoom);
+      setView('lobby');
+    } catch (e) {
+      console.error(e);
+      setError('Erro ao criar sala. Tente novamente.');
+    }
   };
 
-  const joinRoom = () => {
+  const joinRoom = async () => {
     if (!playerName || !roomIdInput) {
       setError('Preencha nome e código da sala');
       return;
     }
-    socket?.emit('join_room', { roomId: roomIdInput.toUpperCase(), name: playerName });
+
+    const roomId = roomIdInput.toUpperCase();
+    const roomRef = ref(database, `rooms/${roomId}`);
+
+    try {
+      const snapshot = await get(roomRef);
+      if (snapshot.exists()) {
+        const currentRoom = snapshot.val() as GameRoom;
+        
+        if (currentRoom.status !== 'waiting') {
+          setError('Jogo já começou!');
+          return;
+        }
+
+        if (currentRoom.players.some(p => p.id === playerId)) {
+           // Rejoining
+           setRoom(currentRoom);
+           setView('lobby');
+           return;
+        }
+
+        if (currentRoom.players.length >= 4) {
+          setError('Sala cheia!');
+          return;
+        }
+
+        const updatedPlayers = [...currentRoom.players, {
+          id: playerId,
+          name: playerName,
+          hand: [],
+          score: 0
+        }];
+
+        await update(roomRef, { players: updatedPlayers });
+        setRoom({ ...currentRoom, players: updatedPlayers });
+        setView('lobby');
+      } else {
+        setError('Sala não encontrada');
+      }
+    } catch (e) {
+      console.error(e);
+      setError('Erro ao entrar na sala');
+    }
   };
 
-  const startGame = () => {
-    if (room) {
-      socket?.emit('start_game', room.id);
+  const startGame = async () => {
+    if (!room) return;
+
+    // Generate Deck
+    const deck: DominoPiece[] = [];
+    for (let i = 0; i <= 6; i++) {
+      for (let j = i; j <= 6; j++) {
+        deck.push({ left: i, right: j });
+      }
     }
+
+    // Shuffle
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+
+    // Distribute
+    const updatedPlayers = room.players.map(player => {
+      const hand = deck.splice(0, room.config.piecesPerPlayer);
+      return { ...player, hand };
+    });
+
+    // Determine who starts (simplified: random or player 0)
+    // In real dominoes, usually double-6 starts or highest double.
+    // Let's stick to player 0 for simplicity or keep current logic if any.
+    
+    await update(ref(database, `rooms/${room.id}`), {
+      status: 'playing',
+      players: updatedPlayers,
+      board: [],
+      currentTurnIndex: 0,
+      leftEnd: null,
+      rightEnd: null
+    });
+  };
+
+  const playPiece = async (piece: DominoPiece, side: 'left' | 'right') => {
+    if (!room) return;
+    
+    // Optimistic update check
+    const playerIndex = room.players.findIndex(p => p.id === playerId);
+    if (playerIndex === -1 || room.currentTurnIndex !== playerIndex) return;
+
+    const player = room.players[playerIndex];
+    const pieceIndex = player.hand.findIndex(p => 
+      (p.left === piece.left && p.right === piece.right) || 
+      (p.left === piece.right && p.right === piece.left)
+    );
+
+    if (pieceIndex === -1) return;
+
+    // Logic similar to server.ts but client-side (validated by Firebase rules ideally, but here just logic)
+    let playedPiece = { ...player.hand[pieceIndex] };
+    let newBoard = [...(room.board || [])];
+    let newLeftEnd = room.leftEnd;
+    let newRightEnd = room.rightEnd;
+
+    if (newBoard.length === 0) {
+      newBoard.push({ piece: playedPiece, ownerId: player.id });
+      newLeftEnd = playedPiece.left;
+      newRightEnd = playedPiece.right;
+    } else {
+      if (side === 'left') {
+        if (playedPiece.right === newLeftEnd) {
+          // matches
+        } else if (playedPiece.left === newLeftEnd) {
+          playedPiece = { left: playedPiece.right, right: playedPiece.left };
+        } else {
+          setError('Jogada inválida!');
+          setTimeout(() => setError(''), 2000);
+          return;
+        }
+        newBoard.unshift({ piece: playedPiece, ownerId: player.id });
+        newLeftEnd = playedPiece.left;
+      } else {
+        if (playedPiece.left === newRightEnd) {
+          // matches
+        } else if (playedPiece.right === newRightEnd) {
+          playedPiece = { left: playedPiece.right, right: playedPiece.left };
+        } else {
+          setError('Jogada inválida!');
+          setTimeout(() => setError(''), 2000);
+          return;
+        }
+        newBoard.push({ piece: playedPiece, ownerId: player.id });
+        newRightEnd = playedPiece.right;
+      }
+    }
+
+    const newHand = [...player.hand];
+    newHand.splice(pieceIndex, 1);
+    
+    const updatedPlayers = [...room.players];
+    updatedPlayers[playerIndex] = { ...player, hand: newHand };
+
+    let updates: any = {
+      board: newBoard,
+      players: updatedPlayers,
+      leftEnd: newLeftEnd,
+      rightEnd: newRightEnd,
+      currentTurnIndex: (room.currentTurnIndex + 1) % room.players.length
+    };
+
+    if (newHand.length === 0) {
+      updates.status = 'finished';
+      updates.winner = player;
+    }
+
+    await update(ref(database, `rooms/${room.id}`), updates);
   };
 
   const copyRoomCode = () => {
     if (room?.id) {
       navigator.clipboard.writeText(room.id);
-      // Could add toast here
     }
   };
 
@@ -138,7 +338,6 @@ export function DominoGame({ onBack }: DominoGameProps) {
   );
 
   const renderDots = (num: number, isSmall: boolean) => {
-    // Simplified dot rendering logic
     return <span className={cn("font-bold text-slate-900", isSmall ? "text-xs" : "text-lg")}>{num}</span>;
   };
 
@@ -283,7 +482,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                     {room.players.map((player) => (
                       <div key={player.id} className="bg-green-900/50 p-3 rounded-xl flex items-center justify-between border border-green-700/30">
                         <span className="font-bold">{player.name}</span>
-                        {player.id === socket?.id && <span className="text-xs bg-green-600 px-2 py-1 rounded text-white">Você</span>}
+                        {player.id === playerId && <span className="text-xs bg-green-600 px-2 py-1 rounded text-white">Você</span>}
                       </div>
                     ))}
                     {Array.from({ length: 4 - room.players.length }).map((_, i) => (
@@ -294,7 +493,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   </div>
                 </div>
 
-                {room.players[0].id === socket?.id && (
+                {room.players[0].id === playerId && (
                   <button
                     onClick={startGame}
                     disabled={room.players.length < 2}
@@ -305,7 +504,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   </button>
                 )}
                 
-                {room.players[0].id !== socket?.id && (
+                {room.players[0].id !== playerId && (
                   <p className="mt-8 text-green-300 animate-pulse">Aguardando líder iniciar...</p>
                 )}
               </div>
@@ -326,7 +525,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
 
               {/* Game Board Area */}
               <div className="flex-1 bg-green-800/30 rounded-xl m-2 border border-green-700/30 flex items-center justify-center relative overflow-hidden p-8">
-                {room.board.length === 0 ? (
+                {(!room.board || room.board.length === 0) ? (
                   <div className="text-green-500/30 font-bold text-2xl uppercase tracking-widest">
                     Sua vez de começar!
                   </div>
@@ -347,10 +546,10 @@ export function DominoGame({ onBack }: DominoGameProps) {
                 
                 {/* Opponents Hands (Simplified visualization) */}
                 <div className="absolute top-2 right-2 flex gap-2">
-                  {room.players.filter(p => p.id !== socket?.id).map(p => (
+                  {room.players.filter(p => p.id !== playerId).map(p => (
                     <div key={p.id} className="bg-green-900/80 p-2 rounded-lg border border-green-700 text-xs text-center">
                       <div className="font-bold text-green-300">{p.name}</div>
-                      <div className="text-white">{p.hand.length} peças</div>
+                      <div className="text-white">{p.hand?.length || 0} peças</div>
                     </div>
                   ))}
                 </div>
@@ -359,34 +558,22 @@ export function DominoGame({ onBack }: DominoGameProps) {
               {/* Player Hand */}
               <div className="h-40 bg-green-900/90 border-t border-green-800 p-4 pb-8">
                 <p className="text-xs text-green-400 uppercase font-bold mb-2 text-center">
-                  {room.players[room.currentTurnIndex].id === socket?.id ? "Sua Vez!" : "Aguarde..."}
+                  {room.players[room.currentTurnIndex].id === playerId ? "Sua Vez!" : "Aguarde..."}
                 </p>
                 <div className="flex justify-center gap-2 overflow-x-auto pb-2 px-4">
-                  {room.players.find(p => p.id === socket?.id)?.hand.map((piece, i) => (
+                  {room.players.find(p => p.id === playerId)?.hand?.map((piece, i) => (
                     <motion.button
                       key={i}
                       whileHover={{ y: -10 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => {
-                        if (room.players[room.currentTurnIndex].id !== socket?.id) return;
+                        if (room.players[room.currentTurnIndex].id !== playerId) return;
                         
-                        // Simple auto-play logic for now (tries left, then right)
-                        // In a real game, if both match, user must choose.
-                        // For MVP, we'll just emit and let server validate.
-                        // Ideally, we should show "Left" or "Right" buttons if ambiguous.
-                        
-                        // Try left
-                        socket?.emit('play_piece', { roomId: room.id, piece, side: 'left' });
-                        // Try right (server will ignore if left worked, but this is racey. Better to be explicit)
-                        // For this MVP, let's just send 'left' first. If it fails, user clicks again? 
-                        // No, let's improve this.
-                        
-                        // Better UX: Check locally if it matches left or right
                         const leftEnd = room.leftEnd;
                         const rightEnd = room.rightEnd;
                         
-                        if (room.board.length === 0) {
-                           socket?.emit('play_piece', { roomId: room.id, piece, side: 'left' }); // Side doesn't matter for first piece
+                        if (!room.board || room.board.length === 0) {
+                           playPiece(piece, 'left');
                            return;
                         }
 
@@ -394,23 +581,20 @@ export function DominoGame({ onBack }: DominoGameProps) {
                         const matchesRight = piece.left === rightEnd || piece.right === rightEnd;
 
                         if (matchesLeft && matchesRight && leftEnd !== rightEnd) {
-                          // Ambiguous! Ask user. For now, default to left.
-                          // TODO: Add UI for side selection
                           const side = confirm("Jogar na esquerda?") ? 'left' : 'right';
-                           socket?.emit('play_piece', { roomId: room.id, piece, side });
+                          playPiece(piece, side);
                         } else if (matchesLeft) {
-                           socket?.emit('play_piece', { roomId: room.id, piece, side: 'left' });
+                           playPiece(piece, 'left');
                         } else if (matchesRight) {
-                           socket?.emit('play_piece', { roomId: room.id, piece, side: 'right' });
+                           playPiece(piece, 'right');
                         } else {
-                          // Invalid move feedback
                           setError("Essa peça não encaixa!");
                           setTimeout(() => setError(''), 2000);
                         }
                       }}
                       className={cn(
                         "cursor-pointer transition-opacity",
-                        room.players[room.currentTurnIndex].id !== socket?.id && "opacity-50 cursor-not-allowed"
+                        room.players[room.currentTurnIndex].id !== playerId && "opacity-50 cursor-not-allowed"
                       )}
                     >
                       {renderPiece(piece)}
