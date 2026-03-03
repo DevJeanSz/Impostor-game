@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Copy, Users, Play, GripHorizontal, Share2 } from 'lucide-react';
+import { ArrowLeft, Copy, Users, Play, GripHorizontal, Share2, PlusCircle, SkipForward } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { database } from '../lib/firebase';
 import { ref, set, onValue, update, get, child, push, runTransaction } from 'firebase/database';
@@ -28,11 +28,13 @@ interface GameRoom {
   config: {
     piecesPerPlayer: number;
   };
-  board: { piece: DominoPiece; ownerId: string }[];
+  board: { piece: DominoPiece; ownerId: string; rotation?: number }[];
+  drawPile: DominoPiece[];
   currentTurnIndex: number;
   leftEnd: number | null;
   rightEnd: number | null;
   winner?: Player;
+  lastAction?: string;
 }
 
 export function DominoGame({ onBack }: DominoGameProps) {
@@ -118,6 +120,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
         piecesPerPlayer: piecesConfig
       },
       board: [],
+      drawPile: [],
       currentTurnIndex: 0,
       leftEnd: null,
       rightEnd: null
@@ -206,24 +209,89 @@ export function DominoGame({ onBack }: DominoGameProps) {
       return { ...player, hand };
     });
 
-    // Determine who starts (simplified: random or player 0)
-    // In real dominoes, usually double-6 starts or highest double.
-    // Let's stick to player 0 for simplicity or keep current logic if any.
+    // Determine who starts (Double 6 or highest double)
+    let startIndex = 0;
+    let maxDouble = -1;
+    
+    updatedPlayers.forEach((p, idx) => {
+      p.hand.forEach(piece => {
+        if (piece.left === piece.right && piece.left > maxDouble) {
+          maxDouble = piece.left;
+          startIndex = idx;
+        }
+      });
+    });
+
+    // If no doubles, just random or keep 0 (fallback)
+    if (maxDouble === -1) {
+      startIndex = Math.floor(Math.random() * updatedPlayers.length);
+    }
     
     await update(ref(database, `rooms/${room.id}`), {
       status: 'playing',
       players: updatedPlayers,
       board: [],
-      currentTurnIndex: 0,
+      drawPile: deck, // Remaining pieces go to the "monte"
+      currentTurnIndex: startIndex,
       leftEnd: null,
-      rightEnd: null
+      rightEnd: null,
+      lastAction: 'Jogo iniciado!'
+    });
+  };
+
+  const buyPiece = async () => {
+    if (!room) return;
+    
+    // Optimistic check
+    const playerIndex = room.players.findIndex(p => p.id === playerId);
+    if (playerIndex === -1 || room.currentTurnIndex !== playerIndex) return;
+    
+    if (!room.drawPile || room.drawPile.length === 0) {
+      setError('Monte vazio!');
+      return;
+    }
+
+    const newDrawPile = [...room.drawPile];
+    const piece = newDrawPile.pop(); // Take from top
+    
+    if (!piece) return;
+
+    const player = room.players[playerIndex];
+    const newHand = [...(player.hand || []), piece];
+    
+    const updatedPlayers = [...room.players];
+    updatedPlayers[playerIndex] = { ...player, hand: newHand };
+
+    await update(ref(database, `rooms/${room.id}`), {
+      drawPile: newDrawPile,
+      players: updatedPlayers,
+      lastAction: `${player.name} comprou uma peça.`
+    });
+  };
+
+  const passTurn = async () => {
+    if (!room) return;
+    const playerIndex = room.players.findIndex(p => p.id === playerId);
+    if (playerIndex === -1 || room.currentTurnIndex !== playerIndex) return;
+
+    // Only allow pass if draw pile is empty (or rule variant)
+    // Brazilian rule: must buy until you can play. If pile empty, then pass.
+    if (room.drawPile && room.drawPile.length > 0) {
+      setError('Você deve comprar peças!');
+      return;
+    }
+
+    const nextTurn = (room.currentTurnIndex + 1) % room.players.length;
+    
+    await update(ref(database, `rooms/${room.id}`), {
+      currentTurnIndex: nextTurn,
+      lastAction: `${room.players[playerIndex].name} passou a vez.`
     });
   };
 
   const playPiece = async (piece: DominoPiece, side: 'left' | 'right') => {
     if (!room) return;
     
-    // Optimistic update check
     const playerIndex = room.players.findIndex(p => p.id === playerId);
     if (playerIndex === -1 || room.currentTurnIndex !== playerIndex) return;
 
@@ -235,20 +303,21 @@ export function DominoGame({ onBack }: DominoGameProps) {
 
     if (pieceIndex === -1) return;
 
-    // Logic similar to server.ts but client-side (validated by Firebase rules ideally, but here just logic)
     let playedPiece = { ...player.hand[pieceIndex] };
     let newBoard = [...(room.board || [])];
     let newLeftEnd = room.leftEnd;
     let newRightEnd = room.rightEnd;
+    let rotation = 0;
 
     if (newBoard.length === 0) {
-      newBoard.push({ piece: playedPiece, ownerId: player.id });
+      // First piece
+      newBoard.push({ piece: playedPiece, ownerId: player.id, rotation: playedPiece.left === playedPiece.right ? 90 : 0 });
       newLeftEnd = playedPiece.left;
       newRightEnd = playedPiece.right;
     } else {
       if (side === 'left') {
         if (playedPiece.right === newLeftEnd) {
-          // matches
+          // matches normally
         } else if (playedPiece.left === newLeftEnd) {
           playedPiece = { left: playedPiece.right, right: playedPiece.left };
         } else {
@@ -256,11 +325,16 @@ export function DominoGame({ onBack }: DominoGameProps) {
           setTimeout(() => setError(''), 2000);
           return;
         }
-        newBoard.unshift({ piece: playedPiece, ownerId: player.id });
+        
+        // Determine rotation for visual flow
+        const isDouble = playedPiece.left === playedPiece.right;
+        rotation = isDouble ? 90 : 0; // Simplified rotation logic
+        
+        newBoard.unshift({ piece: playedPiece, ownerId: player.id, rotation });
         newLeftEnd = playedPiece.left;
       } else {
         if (playedPiece.left === newRightEnd) {
-          // matches
+          // matches normally
         } else if (playedPiece.right === newRightEnd) {
           playedPiece = { left: playedPiece.right, right: playedPiece.left };
         } else {
@@ -268,7 +342,11 @@ export function DominoGame({ onBack }: DominoGameProps) {
           setTimeout(() => setError(''), 2000);
           return;
         }
-        newBoard.push({ piece: playedPiece, ownerId: player.id });
+
+        const isDouble = playedPiece.left === playedPiece.right;
+        rotation = isDouble ? 90 : 0;
+
+        newBoard.push({ piece: playedPiece, ownerId: player.id, rotation });
         newRightEnd = playedPiece.right;
       }
     }
@@ -284,12 +362,14 @@ export function DominoGame({ onBack }: DominoGameProps) {
       players: updatedPlayers,
       leftEnd: newLeftEnd,
       rightEnd: newRightEnd,
-      currentTurnIndex: (room.currentTurnIndex + 1) % room.players.length
+      currentTurnIndex: (room.currentTurnIndex + 1) % room.players.length,
+      lastAction: `${player.name} jogou [${playedPiece.left}|${playedPiece.right}]`
     };
 
     if (newHand.length === 0) {
       updates.status = 'finished';
       updates.winner = player;
+      updates.lastAction = `${player.name} venceu a partida!`;
     }
 
     await update(ref(database, `rooms/${room.id}`), updates);
@@ -321,42 +401,103 @@ export function DominoGame({ onBack }: DominoGameProps) {
     }
   };
 
-  // Render Helpers
-  const renderPiece = (piece: DominoPiece, isSmall = false) => (
-    <div className={cn(
-      "bg-white rounded-md border border-slate-300 flex flex-col items-center justify-between shadow-sm select-none",
-      isSmall ? "w-6 h-12 p-0.5" : "w-10 h-20 p-1"
-    )}>
+  // --- Visual Rendering Helpers ---
+
+  // Dot positions grid (3x3)
+  // 0 1 2
+  // 3 4 5
+  // 6 7 8
+  const getDotPositions = (num: number) => {
+    switch (num) {
+      case 1: return [4];
+      case 2: return [2, 6]; // Top-right, Bottom-left
+      case 3: return [2, 4, 6];
+      case 4: return [0, 2, 6, 8];
+      case 5: return [0, 2, 4, 6, 8];
+      case 6: return [0, 2, 3, 5, 6, 8]; // Two rows of 3
+      default: return [];
+    }
+  };
+
+  const renderDots = (num: number, isSmall: boolean) => {
+    const positions = getDotPositions(num);
+    return (
+      <div className={cn("grid grid-cols-3 grid-rows-3 w-full h-full p-[2px]", isSmall ? "gap-[1px]" : "gap-0.5")}>
+        {Array.from({ length: 9 }).map((_, i) => (
+          <div key={i} className="flex items-center justify-center">
+            {positions.includes(i) && (
+              <div className={cn(
+                "rounded-full bg-black shadow-inner",
+                isSmall ? "w-1 h-1" : "w-2 h-2"
+              )} />
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderPiece = (piece: DominoPiece, isSmall = false, rotation = 0) => (
+    <div 
+      className={cn(
+        "relative bg-[#f0f0f0] rounded-md flex flex-col items-center justify-between select-none overflow-hidden",
+        "shadow-[2px_3px_0px_0px_#b0b0b0] border border-slate-300", // 3D effect
+        isSmall ? "w-6 h-12" : "w-10 h-20"
+      )}
+      style={{ transform: `rotate(${rotation}deg)` }}
+    >
+      {/* Highlight/Glare */}
+      <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/80 to-transparent pointer-events-none" />
+      
       <div className="flex-1 w-full flex items-center justify-center">
         {renderDots(piece.left, isSmall)}
       </div>
-      <div className="w-full h-px bg-slate-300"></div>
+      <div className="w-full h-[1px] bg-slate-400 shadow-[0px_1px_0px_rgba(255,255,255,0.5)]"></div>
       <div className="flex-1 w-full flex items-center justify-center">
         {renderDots(piece.right, isSmall)}
       </div>
     </div>
   );
 
-  const renderDots = (num: number, isSmall: boolean) => {
-    return <span className={cn("font-bold text-slate-900", isSmall ? "text-xs" : "text-lg")}>{num}</span>;
+  // Check if current player has any valid moves
+  const canPlay = () => {
+    if (!room || !room.board || room.board.length === 0) return true; // Can always play first piece if it's their turn (logic handled elsewhere)
+    
+    const player = room.players.find(p => p.id === playerId);
+    if (!player) return false;
+
+    const left = room.leftEnd;
+    const right = room.rightEnd;
+
+    return player.hand.some(p => 
+      p.left === left || p.right === left || p.left === right || p.right === right
+    );
   };
 
+  const isMyTurn = room?.players[room.currentTurnIndex]?.id === playerId;
+  const hasValidMove = canPlay();
+  const canBuy = room?.drawPile && room.drawPile.length > 0;
+
   return (
-    <div className="h-full flex flex-col relative bg-green-900 text-slate-50">
-      <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-10 bg-green-950/50 backdrop-blur-sm">
+    <div className="h-full flex flex-col relative bg-[#1a472a] text-slate-50 overflow-hidden font-sans">
+      {/* Wood texture overlay */}
+      <div className="absolute inset-0 opacity-20 pointer-events-none" 
+           style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/wood-pattern.png")' }}></div>
+
+      <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-10 bg-black/30 backdrop-blur-sm border-b border-white/10">
         <button 
           onClick={onBack}
           className="p-2 text-slate-300 hover:text-white transition-colors"
         >
           <ArrowLeft size={24} />
         </button>
-        <h1 className="text-xl font-bold tracking-wider flex items-center gap-2">
-          <GripHorizontal /> DOMINÓ ONLINE
+        <h1 className="text-xl font-bold tracking-wider flex items-center gap-2 text-[#f0d0a0] drop-shadow-md">
+          <GripHorizontal /> DOMINÓ CLÁSSICO
         </h1>
         <div className="w-10"></div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center p-6 pt-20">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 pt-20 overflow-y-auto w-full relative z-0">
         <AnimatePresence mode="wait">
           {view === 'menu' && (
             <motion.div 
@@ -366,8 +507,8 @@ export function DominoGame({ onBack }: DominoGameProps) {
               exit={{ opacity: 0, y: -20 }}
               className="w-full max-w-md space-y-6"
             >
-              <div className="bg-green-800/50 p-6 rounded-2xl border border-green-700/50 space-y-4">
-                <h2 className="text-2xl font-bold text-center mb-6">Novo Jogo</h2>
+              <div className="bg-black/40 p-6 rounded-2xl border border-white/10 space-y-4 backdrop-blur-md shadow-2xl">
+                <h2 className="text-2xl font-bold text-center mb-6 text-[#f0d0a0]">Novo Jogo</h2>
                 
                 <div className="space-y-2">
                   <label className="text-sm text-green-200 font-bold uppercase">Seu Nome</label>
@@ -376,21 +517,21 @@ export function DominoGame({ onBack }: DominoGameProps) {
                     value={playerName}
                     onChange={(e) => setPlayerName(e.target.value)}
                     placeholder="Como quer ser chamado?"
-                    className="w-full bg-green-950/50 border border-green-700 rounded-xl p-4 text-white placeholder-green-700 focus:outline-none focus:border-green-400 transition-colors"
+                    className="w-full bg-black/30 border border-green-800 rounded-xl p-4 text-white placeholder-green-600 focus:outline-none focus:border-[#f0d0a0] transition-colors"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 pt-4">
                   <div className="space-y-2">
-                    <label className="text-xs text-green-300 font-bold uppercase">Pedras por Jogador</label>
-                    <div className="flex bg-green-950/50 rounded-xl p-1 border border-green-700">
-                      {[3, 6, 7].map(num => (
+                    <label className="text-xs text-green-300 font-bold uppercase">Pedras Iniciais</label>
+                    <div className="flex bg-black/30 rounded-xl p-1 border border-green-800">
+                      {[6, 7].map(num => (
                         <button
                           key={num}
                           onClick={() => setPiecesConfig(num)}
                           className={cn(
                             "flex-1 py-2 rounded-lg text-sm font-bold transition-all",
-                            piecesConfig === num ? "bg-green-600 text-white shadow-lg" : "text-green-400 hover:text-green-200"
+                            piecesConfig === num ? "bg-[#f0d0a0] text-black shadow-lg" : "text-green-400 hover:text-green-200"
                           )}
                         >
                           {num}
@@ -402,15 +543,15 @@ export function DominoGame({ onBack }: DominoGameProps) {
 
                 <button
                   onClick={createRoom}
-                  className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-900/20 transition-all active:scale-95 mt-4"
+                  className="w-full bg-[#f0d0a0] hover:bg-[#e0c090] text-black font-bold py-4 rounded-xl shadow-[0px_4px_0px_0px_#b09060] active:shadow-none active:translate-y-[4px] transition-all mt-4"
                 >
                   Criar Sala
                 </button>
 
                 <div className="relative flex py-2 items-center">
-                  <div className="flex-grow border-t border-green-700"></div>
+                  <div className="flex-grow border-t border-white/10"></div>
                   <span className="flex-shrink-0 mx-4 text-green-300 text-xs uppercase">Ou entre em uma</span>
-                  <div className="flex-grow border-t border-green-700"></div>
+                  <div className="flex-grow border-t border-white/10"></div>
                 </div>
 
                 <div className="flex flex-col gap-2">
@@ -419,11 +560,11 @@ export function DominoGame({ onBack }: DominoGameProps) {
                     value={roomIdInput}
                     onChange={(e) => setRoomIdInput(e.target.value)}
                     placeholder="Código da Sala"
-                    className="w-full bg-green-950/50 border border-green-700 rounded-xl p-4 text-white placeholder-green-700 focus:outline-none focus:border-green-400 transition-colors uppercase text-center"
+                    className="w-full bg-black/30 border border-green-800 rounded-xl p-4 text-white placeholder-green-600 focus:outline-none focus:border-[#f0d0a0] transition-colors uppercase text-center"
                   />
                   <button
                     onClick={joinRoom}
-                    className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-4 rounded-xl transition-all active:scale-95"
+                    className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-4 rounded-xl shadow-[0px_4px_0px_0px_#334155] active:shadow-none active:translate-y-[4px] transition-all"
                   >
                     Entrar
                   </button>
@@ -434,7 +575,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-red-500/90 text-white p-3 rounded-lg text-center text-sm font-bold"
+                  className="bg-red-500/90 text-white p-3 rounded-lg text-center text-sm font-bold shadow-lg"
                 >
                   {error}
                 </motion.div>
@@ -449,23 +590,23 @@ export function DominoGame({ onBack }: DominoGameProps) {
               animate={{ opacity: 1, scale: 1 }}
               className="w-full max-w-md space-y-6 text-center"
             >
-              <div className="bg-green-800/50 p-8 rounded-3xl border border-green-700/50">
+              <div className="bg-black/40 p-8 rounded-3xl border border-white/10 backdrop-blur-md shadow-2xl">
                 <h2 className="text-slate-300 text-sm uppercase tracking-widest mb-4">Código da Sala</h2>
                 
                 <div className="flex flex-col items-center gap-4 mb-8">
                   <div 
                     onClick={copyRoomCode}
-                    className="bg-green-950/50 border-2 border-green-500/30 rounded-2xl px-8 py-4 flex items-center gap-4 cursor-pointer hover:bg-green-900/50 transition-colors group"
+                    className="bg-black/30 border-2 border-[#f0d0a0]/30 rounded-2xl px-8 py-4 flex items-center gap-4 cursor-pointer hover:bg-black/50 transition-colors group"
                   >
-                    <span className="text-5xl font-mono font-bold text-white tracking-widest group-hover:scale-105 transition-transform">
+                    <span className="text-5xl font-mono font-bold text-[#f0d0a0] tracking-widest group-hover:scale-105 transition-transform">
                       {room.id}
                     </span>
-                    <Copy size={24} className="text-green-400 group-hover:text-white transition-colors" />
+                    <Copy size={24} className="text-[#f0d0a0] group-hover:text-white transition-colors" />
                   </div>
 
                   <button
                     onClick={shareRoom}
-                    className="flex items-center gap-2 text-green-300 hover:text-white transition-colors text-sm font-bold uppercase tracking-wider bg-green-900/30 px-4 py-2 rounded-full hover:bg-green-800/50"
+                    className="flex items-center gap-2 text-[#f0d0a0] hover:text-white transition-colors text-sm font-bold uppercase tracking-wider bg-black/30 px-4 py-2 rounded-full hover:bg-black/50"
                   >
                     <Share2 size={16} />
                     Compartilhar Link
@@ -480,13 +621,13 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   
                   <div className="space-y-2">
                     {room.players.map((player) => (
-                      <div key={player.id} className="bg-green-900/50 p-3 rounded-xl flex items-center justify-between border border-green-700/30">
-                        <span className="font-bold">{player.name}</span>
-                        {player.id === playerId && <span className="text-xs bg-green-600 px-2 py-1 rounded text-white">Você</span>}
+                      <div key={player.id} className="bg-white/5 p-3 rounded-xl flex items-center justify-between border border-white/10">
+                        <span className="font-bold text-white">{player.name}</span>
+                        {player.id === playerId && <span className="text-xs bg-[#f0d0a0] text-black font-bold px-2 py-1 rounded">Você</span>}
                       </div>
                     ))}
                     {Array.from({ length: 4 - room.players.length }).map((_, i) => (
-                      <div key={`empty-${i}`} className="border-2 border-dashed border-green-800 p-3 rounded-xl text-green-800 font-bold">
+                      <div key={`empty-${i}`} className="border-2 border-dashed border-white/10 p-3 rounded-xl text-white/30 font-bold">
                         Aguardando...
                       </div>
                     ))}
@@ -497,7 +638,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   <button
                     onClick={startGame}
                     disabled={room.players.length < 2}
-                    className="w-full mt-8 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-900/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                    className="w-full mt-8 bg-[#f0d0a0] hover:bg-[#e0c090] disabled:bg-slate-700 disabled:text-slate-500 disabled:shadow-none text-black font-bold py-4 rounded-xl shadow-[0px_4px_0px_0px_#b09060] active:shadow-none active:translate-y-[4px] transition-all flex items-center justify-center gap-2"
                   >
                     <Play size={20} />
                     Iniciar Jogo
@@ -505,7 +646,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                 )}
                 
                 {room.players[0].id !== playerId && (
-                  <p className="mt-8 text-green-300 animate-pulse">Aguardando líder iniciar...</p>
+                  <p className="mt-8 text-[#f0d0a0] animate-pulse font-bold">Aguardando líder iniciar...</p>
                 )}
               </div>
             </motion.div>
@@ -514,23 +655,30 @@ export function DominoGame({ onBack }: DominoGameProps) {
           {view === 'game' && room && (
             <div className="w-full h-full flex flex-col">
               {/* Game Info */}
-              <div className="flex justify-between items-center px-4 py-2 bg-green-900/50">
+              <div className="flex justify-between items-center px-4 py-2 bg-black/30 backdrop-blur-sm border-b border-white/5">
                 <div className="text-sm text-green-300">
-                  Turno de: <span className="font-bold text-white">{room.players[room.currentTurnIndex].name}</span>
+                  Turno de: <span className="font-bold text-[#f0d0a0] text-lg ml-1">{room.players[room.currentTurnIndex].name}</span>
                 </div>
-                <div className="text-xs text-green-400">
-                  Sala: {room.id}
+                <div className="text-xs text-white/50">
+                  Monte: {room.drawPile?.length || 0}
                 </div>
               </div>
 
+              {/* Status Message */}
+              {room.lastAction && (
+                <div className="bg-black/40 text-white text-center text-xs py-1 px-4 mx-auto mt-2 rounded-full backdrop-blur-sm border border-white/10">
+                  {room.lastAction}
+                </div>
+              )}
+
               {/* Game Board Area */}
-              <div className="flex-1 bg-green-800/30 rounded-xl m-2 border border-green-700/30 flex items-center justify-center relative overflow-hidden p-8">
+              <div className="flex-1 rounded-xl m-2 flex items-center justify-center relative overflow-hidden p-8 shadow-inner bg-[#11301c]">
                 {(!room.board || room.board.length === 0) ? (
-                  <div className="text-green-500/30 font-bold text-2xl uppercase tracking-widest">
-                    Sua vez de começar!
+                  <div className="text-white/20 font-bold text-2xl uppercase tracking-widest text-center">
+                    {isMyTurn ? "Sua vez de começar!" : "Aguardando início..."}
                   </div>
                 ) : (
-                  <div className="flex items-center gap-1 flex-wrap justify-center max-w-full">
+                  <div className="flex items-center gap-1 flex-wrap justify-center max-w-full overflow-auto p-4">
                     {room.board.map((item, index) => (
                       <motion.div
                         key={index}
@@ -538,36 +686,64 @@ export function DominoGame({ onBack }: DominoGameProps) {
                         animate={{ scale: 1 }}
                         className="flex-shrink-0"
                       >
-                        {renderPiece(item.piece, true)}
+                        {renderPiece(item.piece, true, item.rotation)}
                       </motion.div>
                     ))}
                   </div>
                 )}
                 
-                {/* Opponents Hands (Simplified visualization) */}
+                {/* Opponents Hands */}
                 <div className="absolute top-2 right-2 flex gap-2">
                   {room.players.filter(p => p.id !== playerId).map(p => (
-                    <div key={p.id} className="bg-green-900/80 p-2 rounded-lg border border-green-700 text-xs text-center">
-                      <div className="font-bold text-green-300">{p.name}</div>
-                      <div className="text-white">{p.hand?.length || 0} peças</div>
+                    <div key={p.id} className="bg-black/60 p-2 rounded-lg border border-white/10 text-xs text-center backdrop-blur-sm">
+                      <div className="font-bold text-[#f0d0a0]">{p.name}</div>
+                      <div className="text-white flex items-center justify-center gap-1">
+                        <div className="w-3 h-4 bg-white/20 rounded-sm"></div>
+                        {p.hand?.length || 0}
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Player Hand */}
-              <div className="h-40 bg-green-900/90 border-t border-green-800 p-4 pb-8">
-                <p className="text-xs text-green-400 uppercase font-bold mb-2 text-center">
-                  {room.players[room.currentTurnIndex].id === playerId ? "Sua Vez!" : "Aguarde..."}
-                </p>
-                <div className="flex justify-center gap-2 overflow-x-auto pb-2 px-4">
+              {/* Player Hand & Controls */}
+              <div className="bg-black/80 border-t border-[#f0d0a0]/30 p-4 pb-8 backdrop-blur-md">
+                <div className="flex justify-between items-center mb-4 px-2">
+                  <p className="text-xs text-[#f0d0a0] uppercase font-bold">
+                    {isMyTurn ? "Sua Vez!" : "Aguarde..."}
+                  </p>
+                  
+                  {isMyTurn && !hasValidMove && (
+                    <div className="flex gap-2">
+                      {canBuy ? (
+                        <button 
+                          onClick={buyPiece}
+                          className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2 px-4 rounded-full shadow-lg flex items-center gap-2 animate-bounce"
+                        >
+                          <PlusCircle size={16} />
+                          COMPRAR PEÇA
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={passTurn}
+                          className="bg-red-600 hover:bg-red-500 text-white text-xs font-bold py-2 px-4 rounded-full shadow-lg flex items-center gap-2"
+                        >
+                          <SkipForward size={16} />
+                          PASSAR VEZ
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-center gap-3 overflow-x-auto pb-4 px-4 min-h-[90px]">
                   {room.players.find(p => p.id === playerId)?.hand?.map((piece, i) => (
                     <motion.button
                       key={i}
-                      whileHover={{ y: -10 }}
+                      whileHover={{ y: -15, scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => {
-                        if (room.players[room.currentTurnIndex].id !== playerId) return;
+                        if (!isMyTurn) return;
                         
                         const leftEnd = room.leftEnd;
                         const rightEnd = room.rightEnd;
@@ -593,8 +769,8 @@ export function DominoGame({ onBack }: DominoGameProps) {
                         }
                       }}
                       className={cn(
-                        "cursor-pointer transition-opacity",
-                        room.players[room.currentTurnIndex].id !== playerId && "opacity-50 cursor-not-allowed"
+                        "cursor-pointer transition-all relative",
+                        !isMyTurn && "opacity-50 cursor-not-allowed grayscale"
                       )}
                     >
                       {renderPiece(piece)}
