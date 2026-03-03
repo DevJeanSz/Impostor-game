@@ -56,6 +56,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
   });
 
   const [isDragging, setIsDragging] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPiece, setSelectedPiece] = useState<DominoPiece | null>(null);
   
   // Responsive pieces per row for Snake Layout
@@ -78,7 +79,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
       <div 
         ref={ref}
         onClick={() => {
-          if (selectedPiece) {
+          if (selectedPiece && !isProcessing) {
             playPiece(selectedPiece, side);
             setSelectedPiece(null);
           }
@@ -591,12 +592,14 @@ export function DominoGame({ onBack }: DominoGameProps) {
   };
 
   const playPiece = async (piece: DominoPiece, side: 'left' | 'right') => {
-    if (!room) return;
+    if (!room || isProcessing) return;
     
     const currentPlayer = room.players[room.currentTurnIndex];
     const isBotTurn = currentPlayer.isBot;
 
     if (!isBotTurn && currentPlayer.id !== playerId) return;
+
+    setIsProcessing(true);
 
     const playerIndex = room.currentTurnIndex;
     const player = room.players[playerIndex];
@@ -607,7 +610,10 @@ export function DominoGame({ onBack }: DominoGameProps) {
       (p.left === piece.right && p.right === piece.left)
     );
 
-    if (pieceIndex === -1) return;
+    if (pieceIndex === -1) {
+      setIsProcessing(false);
+      return;
+    }
 
     let playedPiece = { ...player.hand[pieceIndex] };
     let newBoard = [...(room.board || [])];
@@ -634,6 +640,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
             setError('Jogada inválida!');
             setTimeout(() => setError(''), 2000);
           }
+          setIsProcessing(false);
           return;
         }
         
@@ -652,6 +659,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
             setError('Jogada inválida!');
             setTimeout(() => setError(''), 2000);
           }
+          setIsProcessing(false);
           return;
         }
 
@@ -697,7 +705,13 @@ export function DominoGame({ onBack }: DominoGameProps) {
       updates.lastAction = `${player.name} bateu! (+${totalPoints} pts)`;
     }
 
-    await update(ref(database, `rooms/${room.id}`), updates);
+    try {
+      await update(ref(database, `rooms/${room.id}`), updates);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const copyRoomCode = () => {
@@ -1130,7 +1144,8 @@ export function DominoGame({ onBack }: DominoGameProps) {
                           <div 
                             key={rowIndex} 
                             className={cn(
-                              "flex items-center justify-center w-full",
+                              "flex items-center w-full",
+                              rows.length === 1 ? "justify-center" : "justify-start",
                               rowIndex % 2 === 1 ? "flex-row-reverse" : "flex-row",
                               rowIndex > 0 && "-mt-[1px]" // Overlap vertically
                             )}
