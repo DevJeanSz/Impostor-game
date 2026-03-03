@@ -28,7 +28,7 @@ interface GameRoom {
   config: {
     piecesPerPlayer: number;
   };
-  board: { piece: DominoPiece; ownerId: string; rotation?: number }[];
+  board: { piece: DominoPiece; ownerId: string; orientation?: 'vertical' | 'horizontal' }[];
   drawPile: DominoPiece[];
   currentTurnIndex: number;
   leftEnd: number | null;
@@ -339,11 +339,14 @@ export function DominoGame({ onBack }: DominoGameProps) {
     let newBoard = [...(room.board || [])];
     let newLeftEnd = room.leftEnd;
     let newRightEnd = room.rightEnd;
-    let rotation = 0;
+    let orientation: 'vertical' | 'horizontal' = 'horizontal';
 
     if (newBoard.length === 0) {
       // First piece
-      newBoard.push({ piece: playedPiece, ownerId: player.id, rotation: playedPiece.left === playedPiece.right ? 90 : 0 });
+      const isDouble = playedPiece.left === playedPiece.right;
+      orientation = isDouble ? 'vertical' : 'horizontal';
+      
+      newBoard.push({ piece: playedPiece, ownerId: player.id, orientation });
       newLeftEnd = playedPiece.left;
       newRightEnd = playedPiece.right;
     } else {
@@ -358,11 +361,10 @@ export function DominoGame({ onBack }: DominoGameProps) {
           return;
         }
         
-        // Determine rotation for visual flow
         const isDouble = playedPiece.left === playedPiece.right;
-        rotation = isDouble ? 90 : 0; // Simplified rotation logic
+        orientation = isDouble ? 'vertical' : 'horizontal';
         
-        newBoard.unshift({ piece: playedPiece, ownerId: player.id, rotation });
+        newBoard.unshift({ piece: playedPiece, ownerId: player.id, orientation });
         newLeftEnd = playedPiece.left;
       } else {
         if (playedPiece.left === newRightEnd) {
@@ -376,9 +378,9 @@ export function DominoGame({ onBack }: DominoGameProps) {
         }
 
         const isDouble = playedPiece.left === playedPiece.right;
-        rotation = isDouble ? 90 : 0;
+        orientation = isDouble ? 'vertical' : 'horizontal';
 
-        newBoard.push({ piece: playedPiece, ownerId: player.id, rotation });
+        newBoard.push({ piece: playedPiece, ownerId: player.id, orientation });
         newRightEnd = playedPiece.right;
       }
     }
@@ -461,7 +463,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
             {positions.includes(i) && (
               <div className={cn(
                 "rounded-full bg-black",
-                isSmall ? "w-1 h-1" : "w-1.5 h-1.5"
+                isSmall ? "w-1 h-1" : "w-2.5 h-2.5" // Thicker dots for player hand
               )} />
             )}
           </div>
@@ -470,23 +472,38 @@ export function DominoGame({ onBack }: DominoGameProps) {
     );
   };
 
-  const renderPiece = (piece: DominoPiece, isSmall = false, rotation = 0) => (
-    <div 
-      className={cn(
-        "relative bg-white rounded flex flex-col items-center justify-between select-none overflow-hidden border border-slate-400",
-        isSmall ? "w-6 h-12" : "w-12 h-24"
-      )}
-      style={{ transform: `rotate(${rotation}deg)` }}
-    >
-      <div className="flex-1 w-full flex items-center justify-center">
-        {renderDots(piece.left, isSmall)}
+  const renderPiece = (piece: DominoPiece, isSmall = false, orientation: 'vertical' | 'horizontal' = 'vertical') => {
+    const isHorizontal = orientation === 'horizontal';
+    
+    // Dimensions based on size and orientation
+    // Small (Board): Vertical 24x48 (w-6 h-12), Horizontal 48x24 (w-12 h-6)
+    // Large (Hand): Vertical 48x96 (w-12 h-24)
+    
+    let sizeClass = "";
+    if (isSmall) {
+      sizeClass = isHorizontal ? "w-12 h-6" : "w-6 h-12";
+    } else {
+      sizeClass = isHorizontal ? "w-24 h-12" : "w-12 h-24";
+    }
+
+    return (
+      <div 
+        className={cn(
+          "relative bg-white rounded flex items-center justify-between select-none overflow-hidden border border-slate-400 shadow-sm",
+          isHorizontal ? "flex-row" : "flex-col",
+          sizeClass
+        )}
+      >
+        <div className="flex-1 w-full h-full flex items-center justify-center">
+          {renderDots(piece.left, isSmall)}
+        </div>
+        <div className={cn("bg-slate-400", isHorizontal ? "w-[1px] h-full" : "w-full h-[1px]")}></div>
+        <div className="flex-1 w-full h-full flex items-center justify-center">
+          {renderDots(piece.right, isSmall)}
+        </div>
       </div>
-      <div className="w-full h-[1px] bg-slate-400"></div>
-      <div className="flex-1 w-full flex items-center justify-center">
-        {renderDots(piece.right, isSmall)}
-      </div>
-    </div>
-  );
+    );
+  };
 
   // Check if current player has any valid moves
   const canPlay = () => {
@@ -700,24 +717,88 @@ export function DominoGame({ onBack }: DominoGameProps) {
                 </div>
               )}
 
+              {/* Game Over Modal */}
+              <AnimatePresence>
+                {room.status === 'finished' && room.winner && (
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                  >
+                    <motion.div 
+                      initial={{ scale: 0.9, y: 20 }}
+                      animate={{ scale: 1, y: 0 }}
+                      className="bg-[#1a472a] border-2 border-[#f0d0a0] rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl relative overflow-hidden"
+                    >
+                      {/* Confetti effect background (simplified) */}
+                      <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] animate-pulse"></div>
+                      
+                      <div className="relative z-10 space-y-6">
+                        <div className="text-[#f0d0a0] uppercase tracking-widest text-sm font-bold">Fim de Jogo</div>
+                        
+                        <div className="space-y-2">
+                          <h2 className="text-3xl font-bold text-white">
+                            {room.winner.id === playerId ? "VOCÊ VENCEU!" : "VENCEDOR"}
+                          </h2>
+                          <div className="text-xl text-[#f0d0a0] font-bold bg-black/30 py-2 px-4 rounded-lg inline-block">
+                            {room.winner.name}
+                          </div>
+                        </div>
+
+                        <div className="text-green-200 text-sm">
+                          {room.lastAction?.includes("travado") ? "O jogo travou e venceu quem tinha menos pontos." : "Bateu e limpou a mão!"}
+                        </div>
+
+                        {room.players[0].id === playerId ? (
+                          <button
+                            onClick={startGame}
+                            className="w-full bg-[#f0d0a0] hover:bg-[#e0c090] text-black font-bold py-3 rounded-xl shadow-[0px_4px_0px_0px_#b09060] active:shadow-none active:translate-y-[4px] transition-all flex items-center justify-center gap-2"
+                          >
+                            <Play size={20} />
+                            Jogar Novamente
+                          </button>
+                        ) : (
+                          <div className="text-white/50 text-xs animate-pulse">
+                            Aguardando líder iniciar nova partida...
+                          </div>
+                        )}
+                        
+                        <button
+                          onClick={() => {
+                            setRoom(null);
+                            setView('menu');
+                          }}
+                          className="text-white/50 hover:text-white text-sm underline decoration-white/30 hover:decoration-white transition-all"
+                        >
+                          Sair da Sala
+                        </button>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Game Board Area */}
-              <div className="flex-1 rounded-xl m-2 flex items-center justify-center relative overflow-hidden p-8 shadow-inner bg-[#11301c]">
+              <div className="flex-1 rounded-xl m-2 flex items-center relative overflow-hidden p-4 shadow-inner bg-[#11301c]">
                 {(!room.board || room.board.length === 0) ? (
-                  <div className="text-white/20 font-bold text-2xl uppercase tracking-widest text-center">
+                  <div className="w-full text-white/20 font-bold text-2xl uppercase tracking-widest text-center">
                     {isMyTurn ? "Sua vez de começar!" : "Aguardando início..."}
                   </div>
                 ) : (
-                  <div className="flex items-center gap-1 flex-wrap justify-center max-w-full overflow-auto p-4">
-                    {room.board.map((item, index) => (
-                      <motion.div
-                        key={index}
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="flex-shrink-0"
-                      >
-                        {renderPiece(item.piece, true, item.rotation)}
-                      </motion.div>
-                    ))}
+                  <div className="flex items-center gap-1 overflow-x-auto w-full h-full px-8">
+                    <div className="flex items-center gap-0.5 mx-auto">
+                      {room.board.map((item, index) => (
+                        <motion.div
+                          key={index}
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          className="flex-shrink-0"
+                        >
+                          {renderPiece(item.piece, true, item.orientation)}
+                        </motion.div>
+                      ))}
+                    </div>
                   </div>
                 )}
                 
@@ -765,7 +846,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   )}
                 </div>
 
-                <div className="flex justify-center gap-3 overflow-x-auto pb-4 px-4 min-h-[90px]">
+                <div className="flex justify-center gap-3 overflow-x-auto pb-4 px-4 min-h-[120px]">
                   {room.players.find(p => p.id === playerId)?.hand?.map((piece, i) => (
                     <motion.button
                       key={i}
@@ -798,11 +879,11 @@ export function DominoGame({ onBack }: DominoGameProps) {
                         }
                       }}
                       className={cn(
-                        "cursor-pointer transition-all relative",
+                        "cursor-pointer transition-all relative flex-shrink-0",
                         !isMyTurn && "opacity-50 cursor-not-allowed grayscale"
                       )}
                     >
-                      {renderPiece(piece)}
+                      {renderPiece(piece, false, 'vertical')}
                     </motion.button>
                   ))}
                 </div>
