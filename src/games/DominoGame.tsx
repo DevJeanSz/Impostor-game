@@ -57,6 +57,41 @@ export function DominoGame({ onBack }: DominoGameProps) {
 
   const [isDragging, setIsDragging] = useState(false);
   const [selectedPiece, setSelectedPiece] = useState<DominoPiece | null>(null);
+  
+  // Responsive pieces per row for Snake Layout
+  const [piecesPerRow, setPiecesPerRow] = useState(12);
+
+  React.useEffect(() => {
+    const handleResize = () => {
+      setPiecesPerRow(window.innerWidth < 768 ? 6 : 12);
+    };
+    handleResize(); // Init
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const renderZone = (side: 'left' | 'right') => {
+    const isLeft = side === 'left';
+    const ref = isLeft ? leftZoneRef : rightZoneRef;
+    
+    return (
+      <div 
+        ref={ref}
+        onClick={() => {
+          if (selectedPiece) {
+            playPiece(selectedPiece, side);
+            setSelectedPiece(null);
+          }
+        }}
+        className={cn(
+          "h-24 border-2 border-dashed rounded-lg flex-shrink-0 transition-all duration-300 cursor-pointer flex items-center justify-center mx-0.5",
+          (isDragging || selectedPiece) ? "w-12 opacity-100 border-[#f0d0a0] bg-[#f0d0a0]/20 scale-110 animate-pulse" : "w-0 opacity-0 border-transparent overflow-hidden"
+        )}
+      >
+         {(isDragging || selectedPiece) && <div className="w-8 h-8 rounded-full bg-[#f0d0a0]/50 animate-ping" />}
+      </div>
+    );
+  };
   const leftZoneRef = useRef<HTMLDivElement>(null);
   const rightZoneRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -697,28 +732,33 @@ export function DominoGame({ onBack }: DominoGameProps) {
   // 0 1 2
   // 3 4 5
   // 6 7 8
-  const getDotPositions = (num: number) => {
-    switch (num) {
-      case 1: return [4];
-      case 2: return [2, 6]; // Top-right, Bottom-left
-      case 3: return [2, 4, 6];
-      case 4: return [0, 2, 6, 8];
-      case 5: return [0, 2, 4, 6, 8];
-      case 6: return [0, 2, 3, 5, 6, 8]; // Two rows of 3
-      default: return [];
-    }
-  };
+  const renderDots = (value: number, isSmall = false) => {
+    // Standard domino dot positions (3x3 grid)
+    const positions: Record<number, number[]> = {
+      0: [],
+      1: [4],
+      2: [2, 6], 
+      3: [2, 4, 6],
+      4: [0, 2, 6, 8],
+      5: [0, 2, 4, 6, 8],
+      6: [0, 1, 2, 6, 7, 8]
+    };
 
-  const renderDots = (num: number, isSmall: boolean) => {
-    const positions = getDotPositions(num);
+    // Adjust 6 for vertical/horizontal if needed, but standard 2x3 fits well in 3x3 grid
+    if (value === 6) {
+        positions[6] = [0, 2, 3, 5, 6, 8];
+    }
+
+    const dotIndices = positions[value] || [];
+
     return (
-      <div className={cn("grid grid-cols-3 grid-rows-3 w-full h-full p-[2px]", isSmall ? "gap-[1px]" : "gap-0.5")}>
-        {Array.from({ length: 9 }).map((_, i) => (
+      <div className="grid grid-cols-3 grid-rows-3 w-full h-full p-[10%] gap-[1px]">
+        {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => (
           <div key={i} className="flex items-center justify-center">
-            {positions.includes(i) && (
+            {dotIndices.includes(i) && (
               <div className={cn(
-                "rounded-full bg-black",
-                isSmall ? "w-1 h-1" : "w-2.5 h-2.5" // Thicker dots for player hand
+                "rounded-full bg-black shadow-[inset_0_1px_1px_rgba(255,255,255,0.5),0_1px_0px_rgba(255,255,255,0.3)]",
+                isSmall ? "w-1.5 h-1.5" : "w-2 h-2 md:w-3 md:h-3" // Larger dots
               )} />
             )}
           </div>
@@ -734,17 +774,6 @@ export function DominoGame({ onBack }: DominoGameProps) {
     // Small (Board): Vertical 24x48 (w-6 h-12), Horizontal 48x24 (w-12 h-6)
     // Large (Hand): Vertical 48x96 (w-12 h-24)
     
-    let baseWidth = isSmall ? (isHorizontal ? 48 : 24) : (isHorizontal ? 96 : 48);
-    let baseHeight = isSmall ? (isHorizontal ? 24 : 48) : (isHorizontal ? 48 : 96);
-
-    // Apply scale
-    const width = baseWidth * scale;
-    const height = baseHeight * scale;
-    
-    // Tailwind classes for size are static, so we use inline styles for dynamic scaling if needed, 
-    // or just stick to a few preset sizes.
-    // Let's use a "mobile-friendly" size for hand pieces.
-
     let sizeClass = "";
     if (isSmall) {
       sizeClass = isHorizontal ? "w-12 h-6" : "w-6 h-12";
@@ -756,16 +785,23 @@ export function DominoGame({ onBack }: DominoGameProps) {
     return (
       <div 
         className={cn(
-          "relative bg-white rounded flex items-center justify-between select-none overflow-hidden border border-slate-400 shadow-sm",
+          "relative bg-[#fdfbf7] rounded-sm flex items-center justify-between select-none overflow-hidden shadow-[1px_1px_0px_0px_#bbb,2px_2px_0px_0px_#999,3px_3px_5px_0px_rgba(0,0,0,0.4)]",
           isHorizontal ? "flex-row" : "flex-col",
           sizeClass
         )}
       >
-        <div className="flex-1 w-full h-full flex items-center justify-center">
+        {/* Inner bevel highlight */}
+        <div className="absolute inset-0 rounded-sm border-t border-l border-white/80 pointer-events-none"></div>
+        <div className="absolute inset-0 rounded-sm border-b border-r border-black/10 pointer-events-none"></div>
+
+        <div className="flex-1 w-full h-full flex items-center justify-center relative">
           {renderDots(piece.left, isSmall)}
         </div>
-        <div className={cn("bg-slate-400", isHorizontal ? "w-[1px] h-full" : "w-full h-[1px]")}></div>
-        <div className="flex-1 w-full h-full flex items-center justify-center">
+        
+        {/* Engraved divider line */}
+        <div className={cn("bg-[#d4d4d4] shadow-[inset_1px_1px_1px_rgba(0,0,0,0.2)]", isHorizontal ? "w-[2px] h-[80%]" : "w-[80%] h-[2px]")}></div>
+        
+        <div className="flex-1 w-full h-full flex items-center justify-center relative">
           {renderDots(piece.right, isSmall)}
         </div>
       </div>
@@ -1075,54 +1111,51 @@ export function DominoGame({ onBack }: DominoGameProps) {
                     </div>
                   </div>
                 ) : (
-                  <div className="w-full h-full overflow-auto flex items-center justify-center p-8">
-                    {/* Snake Layout Container - Adjusted max-width for wrapping */}
-                    <div className="flex flex-wrap items-center justify-center max-w-[600px] md:max-w-[700px]">
-                      
-                      {/* Left Drop Zone */}
-                      <div 
-                        ref={leftZoneRef}
-                        onClick={() => {
-                          if (selectedPiece) {
-                            playPiece(selectedPiece, 'left');
-                            setSelectedPiece(null);
-                          }
-                        }}
-                        className={cn(
-                          "w-12 h-24 border-2 border-dashed rounded-lg flex-shrink-0 transition-all duration-300 cursor-pointer flex items-center justify-center",
-                          (isDragging || selectedPiece) ? "opacity-100 border-[#f0d0a0] bg-[#f0d0a0]/20 scale-110 animate-pulse" : "opacity-0 w-0 border-transparent overflow-hidden"
-                        )}
-                      >
-                         {(isDragging || selectedPiece) && <div className="w-8 h-8 rounded-full bg-[#f0d0a0]/50 animate-ping" />}
-                      </div>
+                  <div className="w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center justify-center p-4">
+                    {/* Snake Layout Container */}
+                    <div className="flex flex-col items-center justify-center w-full max-w-4xl">
+                      {(() => {
+                        const allItems = [
+                          { type: 'zone', side: 'left' },
+                          ...room.board.map(b => ({ type: 'piece', data: b })),
+                          { type: 'zone', side: 'right' }
+                        ];
+                        
+                        const rows = [];
+                        for (let i = 0; i < allItems.length; i += piecesPerRow) {
+                          rows.push(allItems.slice(i, i + piecesPerRow));
+                        }
 
-                      {room.board.map((item, index) => (
-                        <motion.div
-                          key={index}
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          className="flex-shrink-0 -ml-[1px] -mt-[1px]" // Negative margin to overlap borders slightly and remove gaps
-                        >
-                          {renderPiece(item.piece, true, item.orientation)}
-                        </motion.div>
-                      ))}
-
-                      {/* Right Drop Zone */}
-                      <div 
-                        ref={rightZoneRef}
-                        onClick={() => {
-                          if (selectedPiece) {
-                            playPiece(selectedPiece, 'right');
-                            setSelectedPiece(null);
-                          }
-                        }}
-                        className={cn(
-                          "w-12 h-24 border-2 border-dashed rounded-lg flex-shrink-0 transition-all duration-300 cursor-pointer flex items-center justify-center",
-                          (isDragging || selectedPiece) ? "opacity-100 border-[#f0d0a0] bg-[#f0d0a0]/20 scale-110 animate-pulse" : "opacity-0 w-0 border-transparent overflow-hidden"
-                        )}
-                      >
-                        {(isDragging || selectedPiece) && <div className="w-8 h-8 rounded-full bg-[#f0d0a0]/50 animate-ping" />}
-                      </div>
+                        return rows.map((row, rowIndex) => (
+                          <div 
+                            key={rowIndex} 
+                            className={cn(
+                              "flex items-center justify-center w-full",
+                              rowIndex % 2 === 1 ? "flex-row-reverse" : "flex-row",
+                              rowIndex > 0 && "-mt-[1px]" // Overlap vertically
+                            )}
+                          >
+                            {row.map((item, colIndex) => {
+                               if (item.type === 'zone') {
+                                 // @ts-ignore
+                                 return <React.Fragment key={`zone-${item.side}`}>{renderZone(item.side)}</React.Fragment>;
+                               }
+                               return (
+                                 <motion.div
+                                   // @ts-ignore
+                                   key={`piece-${rowIndex}-${colIndex}`}
+                                   initial={{ scale: 0 }}
+                                   animate={{ scale: 1 }}
+                                   className="flex-shrink-0 -ml-[1px] relative z-10"
+                                 >
+                                   {/* @ts-ignore */}
+                                   {renderPiece(item.data.piece, true, item.data.orientation)}
+                                 </motion.div>
+                               );
+                            })}
+                          </div>
+                        ));
+                      })()}
                     </div>
                   </div>
                 )}
