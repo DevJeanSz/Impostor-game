@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Ghost, Users, Zap } from 'lucide-react';
+import { Ghost, Users, Zap, Type, GripHorizontal } from 'lucide-react';
 
 interface HomeScreenProps {
   onSelectGame: (gameId: string) => void;
@@ -14,6 +14,8 @@ export function HomeScreen({ onSelectGame }: HomeScreenProps) {
       description: 'Descubra quem está mentindo entre vocês.',
       icon: Ghost,
       color: 'bg-indigo-500',
+      iconBg: 'bg-indigo-500/20',
+      iconColor: 'text-indigo-400',
       bg: 'bg-slate-800',
       border: 'border-slate-700'
     },
@@ -23,6 +25,8 @@ export function HomeScreen({ onSelectGame }: HomeScreenProps) {
       description: 'Julgue seus amigos sem dó nem piedade.',
       icon: Users,
       color: 'bg-violet-500',
+      iconBg: 'bg-violet-500/20',
+      iconColor: 'text-violet-400',
       bg: 'bg-violet-950/30',
       border: 'border-violet-500/20'
     },
@@ -32,8 +36,32 @@ export function HomeScreen({ onSelectGame }: HomeScreenProps) {
       description: 'Atue, gesticule e faça seu time adivinhar!',
       icon: Zap,
       color: 'bg-amber-500',
+      iconBg: 'bg-amber-500/20',
+      iconColor: 'text-amber-400',
       bg: 'bg-amber-950/30',
       border: 'border-amber-500/20'
+    },
+    {
+      id: 'termo',
+      title: 'Cata Letras',
+      description: 'Descubra a palavra secreta em 6 tentativas.',
+      icon: Type,
+      color: 'bg-emerald-500',
+      iconBg: 'bg-emerald-500/20',
+      iconColor: 'text-emerald-400',
+      bg: 'bg-emerald-950/30',
+      border: 'border-emerald-500/20'
+    },
+    {
+      id: 'domino',
+      title: 'Dominó Online',
+      description: 'Jogue com amigos em tempo real.',
+      icon: GripHorizontal,
+      color: 'bg-green-500',
+      iconBg: 'bg-green-500/20',
+      iconColor: 'text-green-400',
+      bg: 'bg-green-950/30',
+      border: 'border-green-500/20'
     }
   ];
 
@@ -53,17 +81,19 @@ export function HomeScreen({ onSelectGame }: HomeScreenProps) {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => onSelectGame(game.id)}
-            className={`${game.bg} ${game.border} border p-6 rounded-2xl text-left transition-all group relative overflow-hidden`}
+            className={`${game.bg} ${game.border} border p-4 rounded-2xl text-left transition-all group relative overflow-hidden flex items-center gap-4`}
           >
             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
               <game.icon size={80} />
             </div>
-            <div className="relative z-10">
-              <div className={`w-12 h-12 ${game.color}/20 rounded-xl flex items-center justify-center mb-4 text-white`}>
-                <game.icon size={24} className={game.color.replace('bg-', 'text-')} />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-1">{game.title}</h3>
-              <p className="text-sm text-slate-400">{game.description}</p>
+            
+            <div className={`w-12 h-12 ${game.iconBg} rounded-xl flex items-center justify-center shrink-0`}>
+              <game.icon size={24} className={game.iconColor} />
+            </div>
+            
+            <div className="relative z-10 flex-1 min-w-0">
+              <h3 className="text-lg font-bold text-white mb-0.5 truncate">{game.title}</h3>
+              <p className="text-sm text-slate-400 leading-tight">{game.description}</p>
             </div>
           </motion.button>
         ))}

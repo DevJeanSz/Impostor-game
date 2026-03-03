@@ -2,52 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Timer, Check, X, RotateCcw, Play } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { CHARADES_CATEGORIES } from '../data/charades';
 
 interface CharadesGameProps {
   onBack: () => void;
 }
 
-const CATEGORIES = [
-  {
-    id: 'movies',
-    name: 'Filmes e Séries',
-    color: 'bg-amber-500',
-    words: ['Titanic', 'Vingadores', 'Harry Potter', 'Star Wars', 'O Rei Leão', 'Matrix', 'Homem-Aranha', 'Frozen', 'Shrek', 'Jurassic Park', 'Friends', 'Stranger Things', 'La Casa de Papel', 'Round 6', 'Game of Thrones', 'Breaking Bad']
-  },
-  {
-    id: 'animals',
-    name: 'Animais',
-    color: 'bg-emerald-500',
-    words: ['Elefante', 'Girafa', 'Pinguim', 'Canguru', 'Macaco', 'Cobra', 'Tubarão', 'Galinha', 'Sapo', 'Leão', 'Preguiça', 'Formiga', 'Baleia', 'Dinossauro', 'Pato', 'Gato']
-  },
-  {
-    id: 'actions',
-    name: 'Ações',
-    color: 'bg-blue-500',
-    words: ['Dançar', 'Cozinhar', 'Nadar', 'Dirigir', 'Pintar', 'Chorar', 'Dormir', 'Pescar', 'Tocar Guitarra', 'Tirar Selfie', 'Jogar Futebol', 'Varrer', 'Passar Roupa', 'Cortar Cabelo', 'Escovar Dentes']
-  },
-  {
-    id: 'objects',
-    name: 'Objetos',
-    color: 'bg-purple-500',
-    words: ['Geladeira', 'Computador', 'Guarda-chuva', 'Violão', 'Espelho', 'Liquidificador', 'Microfone', 'Bola', 'Relógio', 'Óculos', 'Tesoura', 'Martelo', 'Escada', 'Bicicleta', 'Avião']
-  },
-  {
-    id: 'mix',
-    name: 'Misturado',
-    color: 'bg-rose-500',
-    words: [] // Will be populated dynamically
-  }
-];
-
 // Populate mix category
-CATEGORIES.find(c => c.id === 'mix')!.words = CATEGORIES
-  .filter(c => c.id !== 'mix')
-  .flatMap(c => c.words);
+const categoriesWithMix = [...CHARADES_CATEGORIES];
+const mixCategory = categoriesWithMix.find(c => c.id === 'mix');
+if (mixCategory) {
+  mixCategory.words = categoriesWithMix
+    .filter(c => c.id !== 'mix')
+    .flatMap(c => c.words);
+}
 
 export function CharadesGame({ onBack }: CharadesGameProps) {
   const [gameState, setGameState] = useState<'menu' | 'playing' | 'finished'>('menu');
-  const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0]);
+  const [selectedCategory, setSelectedCategory] = useState(categoriesWithMix[0]);
   const [timeLeft, setTimeLeft] = useState(60);
   const [score, setScore] = useState(0);
   const [currentWord, setCurrentWord] = useState('');
@@ -118,7 +90,7 @@ export function CharadesGame({ onBack }: CharadesGameProps) {
             </div>
 
             <div className="grid gap-3 overflow-y-auto pb-4">
-              {CATEGORIES.map((cat) => (
+              {categoriesWithMix.map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => startGame(cat)}
