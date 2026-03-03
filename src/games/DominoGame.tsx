@@ -74,7 +74,6 @@ export function DominoGame({ onBack }: DominoGameProps) {
     
     const containerWidth = Math.min(window.innerWidth - 32, 800); // Max width 800px
     const pieces = room.board || [];
-    const newLayout: any[] = [];
     
     // If empty board
     if (pieces.length === 0) {
@@ -86,44 +85,46 @@ export function DominoGame({ onBack }: DominoGameProps) {
        return;
     }
     
-    let x = 80; // Start padding (space for left zone)
-    let y = 60;
-    let dir = 1; // 1 = Right, -1 = Left
-    let maxX = containerWidth - 80;
-    let minX = 40;
-
-    // Left Zone Position
-    const leftZone = { left: x - 70, top: y };
+    // 1. Generate Layout (0-based)
+    const tempLayout: any[] = [];
+    let x = 0; 
+    let y = 0;
+    let dir = 1; 
+    const maxRowWidth = containerWidth - 80; // Allow padding
+    
+    // Track bounds
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
 
     for (let i = 0; i < pieces.length; i++) {
       const piece = pieces[i];
       const isDouble = piece.piece.left === piece.piece.right;
       
       let width = isDouble ? PIECE_HEIGHT : PIECE_WIDTH; 
-      let height = isDouble ? PIECE_WIDTH : PIECE_HEIGHT;
       
-      // Check bounds
+      // Check bounds for wrapping
       const nextX = x + ((width + GAP) * dir);
       
       let isTurn = false;
-      if (dir === 1 && nextX > maxX) isTurn = true;
-      if (dir === -1 && nextX < minX) isTurn = true;
+      if (dir === 1 && nextX > maxRowWidth) isTurn = true;
+      if (dir === -1 && nextX < 0) isTurn = true;
 
       if (isTurn) {
         const turnX = x + (dir === 1 ? -10 : 10); 
         const turnY = y + 20; 
         
-        newLayout.push({
+        tempLayout.push({
           ...piece,
-          style: {
-            left: turnX,
-            top: turnY,
-            transform: 'rotate(0deg)', 
-            zIndex: i
-          },
+          style: { left: turnX, top: turnY, transform: 'rotate(0deg)', zIndex: i },
           isVertical: true
         });
         
+        // Update bounds
+        minX = Math.min(minX, turnX);
+        maxX = Math.max(maxX, turnX + 24); // 24 is vertical width
+        maxY = Math.max(maxY, turnY + 48);
+
         y += 60; 
         dir *= -1; 
         x = turnX; 
@@ -131,33 +132,59 @@ export function DominoGame({ onBack }: DominoGameProps) {
       } else {
         const isVertical = isDouble; 
         
-        newLayout.push({
+        tempLayout.push({
           ...piece,
-          style: {
-            left: x,
-            top: y,
-            transform: isVertical ? 'rotate(0deg)' : 'rotate(90deg)',
-            zIndex: i
+          style: { 
+            left: x, 
+            top: y, 
+            transform: isVertical ? 'rotate(0deg)' : 'rotate(90deg)', 
+            zIndex: i 
           },
           isVertical
         });
         
+        // Update bounds
+        const pWidth = isVertical ? 30 : 60; 
+        
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x + pWidth);
+        maxY = Math.max(maxY, y + 30);
+
         const advance = isVertical ? 30 : 55; 
         x += advance * dir;
       }
     }
     
-    // Right Zone Position (at the end of the chain)
-    // We need to adjust based on the last piece's orientation/position
-    // x is already advanced to the "next" position.
-    // But if the last piece was a turn, x is at the turn.
-    // If the last piece was horizontal, x is after it.
+    // 2. Center the Layout
+    const layoutWidth = maxX - minX;
+    const offsetX = (containerWidth - layoutWidth) / 2 - minX;
+    const offsetY = 40; // Top padding
+
+    const finalLayout = tempLayout.map(item => ({
+      ...item,
+      style: {
+        ...item.style,
+        left: item.style.left + offsetX,
+        top: item.style.top + offsetY
+      }
+    }));
     
-    const rightZone = { left: x + (dir === 1 ? 10 : -70), top: y };
+    // 3. Calculate Zones
+    const firstP = finalLayout[0];
     
-    setLayoutPieces(newLayout);
+    const leftZone = { 
+      left: firstP.style.left - 70, 
+      top: firstP.style.top 
+    };
+    
+    const rightZone = { 
+      left: x + offsetX + (dir === 1 ? 10 : -70), 
+      top: y + offsetY 
+    };
+
+    setLayoutPieces(finalLayout);
     setZonePositions({ left: leftZone, right: rightZone });
-    setBoardHeight(y + 150);
+    setBoardHeight(maxY + offsetY + 100);
 
   }, [room?.board, window.innerWidth]);
 
@@ -203,32 +230,27 @@ export function DominoGame({ onBack }: DominoGameProps) {
   useEffect(() => {
     if (!room || room.status !== 'playing' || !room.turnDeadline) return;
 
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       const seconds = Math.max(0, Math.ceil((room.turnDeadline! - Date.now()) / 1000));
       setTimeLeft(seconds);
 
       if (seconds === 0 && room.players[room.currentTurnIndex].id === playerId) {
         // Time's up! Auto-play logic
-        // For simplicity, just pass turn or play random if possible
-        // Ideally, we should try to play a random valid piece
         const player = room.players.find(p => p.id === playerId);
         if (player) {
            // Try to find a valid move
            const left = room.leftEnd;
            const right = room.rightEnd;
            const validPiece = player.hand.find(p => 
-             !room.board.length || p.left === left || p.right === left || p.left === right || p.right === right
+             !room.board || room.board.length === 0 || p.left === left || p.right === left || p.left === right || p.right === right
            );
 
            if (validPiece) {
-             const side = (!room.board.length || validPiece.left === left || validPiece.right === left) ? 'left' : 'right';
-             playPiece(validPiece, side);
+             const side = (!room.board || room.board.length === 0 || validPiece.left === left || validPiece.right === left) ? 'left' : 'right';
+             await playPiece(validPiece, side);
            } else {
-             if (room.config.piecesPerPlayer === 3 && room.drawPile.length > 0) {
-               buyPiece();
-             } else {
-               passTurn();
-             }
+             // Pass turn (force, since timeout)
+             await passTurn(true);
            }
         }
       }
@@ -341,7 +363,11 @@ export function DominoGame({ onBack }: DominoGameProps) {
     } else {
       // No valid moves
       if (room.config.piecesPerPlayer === 3 && room.drawPile && room.drawPile.length > 0) {
-        await buyPiece();
+        const success = await buyPiece();
+        if (!success) {
+           // If buy failed (e.g. empty pile race condition), pass turn
+           await passTurn();
+        }
       } else {
         await passTurn();
       }
@@ -596,13 +622,13 @@ export function DominoGame({ onBack }: DominoGameProps) {
     });
   };
 
-  const buyPiece = async () => {
-    if (!room) return;
+  const buyPiece = async (): Promise<boolean> => {
+    if (!room || isProcessing) return false;
     
     // Only allowed if piecesPerPlayer is 3
     if (room.config.piecesPerPlayer !== 3) {
       setError('Compra não permitida nesta modalidade!');
-      return;
+      return false;
     }
 
     // Optimistic check (allow bot or current player)
@@ -610,34 +636,44 @@ export function DominoGame({ onBack }: DominoGameProps) {
     const isBotTurn = currentPlayer.isBot;
     
     // If it's human turn, check ID. If bot turn, allow execution (since we are the host)
-    if (!isBotTurn && currentPlayer.id !== playerId) return;
+    if (!isBotTurn && currentPlayer.id !== playerId) return false;
     
     if (!room.drawPile || room.drawPile.length === 0) {
       if (!isBotTurn) setError('Monte vazio!');
-      return;
+      return false;
     }
 
-    const newDrawPile = [...room.drawPile];
-    const piece = newDrawPile.pop(); // Take from top
-    
-    if (!piece) return;
+    setIsProcessing(true);
 
-    const playerIndex = room.currentTurnIndex;
-    const player = room.players[playerIndex];
-    const newHand = [...(player.hand || []), piece];
-    
-    const updatedPlayers = [...room.players];
-    updatedPlayers[playerIndex] = { ...player, hand: newHand };
+    try {
+      const newDrawPile = [...room.drawPile];
+      const piece = newDrawPile.pop(); // Take from top
+      
+      if (!piece) return false;
 
-    await update(ref(database, `rooms/${room.id}`), {
-      drawPile: newDrawPile,
-      players: updatedPlayers,
-      lastAction: `${player.name} comprou uma peça.`
-    });
+      const playerIndex = room.currentTurnIndex;
+      const player = room.players[playerIndex];
+      const newHand = [...(player.hand || []), piece];
+      
+      const updatedPlayers = [...room.players];
+      updatedPlayers[playerIndex] = { ...player, hand: newHand };
+
+      await update(ref(database, `rooms/${room.id}`), {
+        drawPile: newDrawPile,
+        players: updatedPlayers,
+        lastAction: `${player.name} comprou uma peça.`
+      });
+      return true;
+    } catch (e) {
+      console.error(e);
+      return false;
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const passTurn = async () => {
-    if (!room) return;
+  const passTurn = async (forcePass: boolean = false) => {
+    if (!room || isProcessing) return;
     
     const currentPlayer = room.players[room.currentTurnIndex];
     const isBotTurn = currentPlayer.isBot;
@@ -645,41 +681,50 @@ export function DominoGame({ onBack }: DominoGameProps) {
     if (!isBotTurn && currentPlayer.id !== playerId) return;
 
     // Rule: must buy until you can play IF piecesPerPlayer is 3 and pile not empty
-    if (room.config.piecesPerPlayer === 3 && room.drawPile && room.drawPile.length > 0) {
+    // Unless forcePass is true (e.g. timeout)
+    if (!forcePass && room.config.piecesPerPlayer === 3 && room.drawPile && room.drawPile.length > 0) {
       if (!isBotTurn) setError('Você deve comprar peças!');
       return;
     }
 
-    const nextTurn = (room.currentTurnIndex + 1) % room.players.length;
-    const newConsecutivePasses = (room.consecutivePasses || 0) + 1;
-    
-    let updates: any = {
-      currentTurnIndex: nextTurn,
-      lastAction: `${currentPlayer.name} passou a vez.`,
-      consecutivePasses: newConsecutivePasses
-    };
+    setIsProcessing(true);
 
-    // Check if game is blocked (everyone passed)
-    if (newConsecutivePasses >= room.players.length) {
-      updates.status = 'finished';
+    try {
+      const nextTurn = (room.currentTurnIndex + 1) % room.players.length;
+      const newConsecutivePasses = (room.consecutivePasses || 0) + 1;
       
-      // Calculate winner by lowest points
-      let minPoints = Infinity;
-      let winner = null;
+      let updates: any = {
+        currentTurnIndex: nextTurn,
+        lastAction: `${currentPlayer.name} passou a vez.`,
+        consecutivePasses: newConsecutivePasses
+      };
+
+      // Check if game is blocked (everyone passed)
+      if (newConsecutivePasses >= room.players.length) {
+        updates.status = 'finished';
+        
+        // Calculate winner by lowest points
+        let minPoints = Infinity;
+        let winner = null;
+        
+        room.players.forEach(p => {
+          const points = (p.hand || []).reduce((sum, piece) => sum + piece.left + piece.right, 0);
+          if (points < minPoints) {
+            minPoints = points;
+            winner = p;
+          }
+        });
+        
+        updates.winner = winner;
+        updates.lastAction = `Jogo travado! ${winner?.name} venceu com menos pontos.`;
+      }
       
-      room.players.forEach(p => {
-        const points = (p.hand || []).reduce((sum, piece) => sum + piece.left + piece.right, 0);
-        if (points < minPoints) {
-          minPoints = points;
-          winner = p;
-        }
-      });
-      
-      updates.winner = winner;
-      updates.lastAction = `Jogo travado! ${winner?.name} venceu com menos pontos.`;
+      await update(ref(database, `rooms/${room.id}`), updates);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsProcessing(false);
     }
-    
-    await update(ref(database, `rooms/${room.id}`), updates);
   };
 
   const playPiece = async (piece: DominoPiece, side: 'left' | 'right') => {
