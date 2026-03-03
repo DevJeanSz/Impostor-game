@@ -19,6 +19,7 @@ interface Player {
   name: string;
   hand: DominoPiece[];
   score: number;
+  isBot?: boolean;
 }
 
 interface GameRoom {
@@ -35,7 +36,7 @@ interface GameRoom {
   rightEnd: number | null;
   winner?: Player;
   lastAction?: string;
-  consecutivePasses: number;
+  turnDeadline?: number;
 }
 
 export function DominoGame({ onBack }: DominoGameProps) {
@@ -45,6 +46,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
   const [roomIdInput, setRoomIdInput] = useState('');
   const [piecesConfig, setPiecesConfig] = useState(6);
   const [error, setError] = useState('');
+  const [timeLeft, setTimeLeft] = useState(60);
   const [playerId, setPlayerId] = useState(() => {
     const stored = localStorage.getItem('domino_player_id');
     if (stored) return stored;
@@ -53,11 +55,60 @@ export function DominoGame({ onBack }: DominoGameProps) {
     return newId;
   });
 
+  const [isDragging, setIsDragging] = useState(false);
+  const [selectedPiece, setSelectedPiece] = useState<DominoPiece | null>(null);
+  const leftZoneRef = useRef<HTMLDivElement>(null);
+  const rightZoneRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (playerName) {
       localStorage.setItem('domino_player_name', playerName);
     }
   }, [playerName]);
+
+  // Clear selection when turn changes or piece played
+  useEffect(() => {
+    setSelectedPiece(null);
+  }, [room?.currentTurnIndex, room?.board?.length]);
+
+  // Timer Logic
+  useEffect(() => {
+    if (!room || room.status !== 'playing' || !room.turnDeadline) return;
+
+    const interval = setInterval(() => {
+      const seconds = Math.max(0, Math.ceil((room.turnDeadline! - Date.now()) / 1000));
+      setTimeLeft(seconds);
+
+      if (seconds === 0 && room.players[room.currentTurnIndex].id === playerId) {
+        // Time's up! Auto-play logic
+        // For simplicity, just pass turn or play random if possible
+        // Ideally, we should try to play a random valid piece
+        const player = room.players.find(p => p.id === playerId);
+        if (player) {
+           // Try to find a valid move
+           const left = room.leftEnd;
+           const right = room.rightEnd;
+           const validPiece = player.hand.find(p => 
+             !room.board.length || p.left === left || p.right === left || p.left === right || p.right === right
+           );
+
+           if (validPiece) {
+             const side = (!room.board.length || validPiece.left === left || validPiece.right === left) ? 'left' : 'right';
+             playPiece(validPiece, side);
+           } else {
+             if (room.config.piecesPerPlayer === 3 && room.drawPile.length > 0) {
+               buyPiece();
+             } else {
+               passTurn();
+             }
+           }
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [room?.turnDeadline, room?.currentTurnIndex, playerId]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -92,6 +143,84 @@ export function DominoGame({ onBack }: DominoGameProps) {
     return () => unsubscribe();
   }, [room?.id, view]);
 
+  // Bot Logic Effect
+  useEffect(() => {
+    if (!room || room.status !== 'playing') return;
+
+    const currentPlayer = room.players[room.currentTurnIndex];
+    if (currentPlayer?.isBot) {
+      const timer = setTimeout(() => {
+        executeBotTurn();
+      }, 1500); // 1.5s delay for realism
+      return () => clearTimeout(timer);
+    }
+  }, [room?.currentTurnIndex, room?.status, room?.lastAction]); // Re-run when turn changes or last action updates (e.g. after buy)
+
+  const executeBotTurn = async () => {
+    if (!room) return;
+    const currentPlayer = room.players[room.currentTurnIndex];
+    if (!currentPlayer.isBot) return;
+
+    // 1. Check for valid moves
+    const left = room.leftEnd;
+    const right = room.rightEnd;
+    const hand = currentPlayer.hand || [];
+
+    // If board is empty (bot starts), play highest double or random
+    if (!room.board || room.board.length === 0) {
+      // Find highest double
+      let bestPieceIndex = -1;
+      let maxDouble = -1;
+      
+      hand.forEach((p, i) => {
+        if (p.left === p.right && p.left > maxDouble) {
+          maxDouble = p.left;
+          bestPieceIndex = i;
+        }
+      });
+
+      // If no double, pick random
+      if (bestPieceIndex === -1) {
+        bestPieceIndex = Math.floor(Math.random() * hand.length);
+      }
+
+      if (bestPieceIndex !== -1) {
+        await playPiece(hand[bestPieceIndex], 'left'); // Side doesn't matter for first piece
+      }
+      return;
+    }
+
+    // Find valid moves
+    const validMoves: { piece: DominoPiece, side: 'left' | 'right' }[] = [];
+    
+    hand.forEach(p => {
+      if (p.left === left || p.right === left) validMoves.push({ piece: p, side: 'left' });
+      if (p.left === right || p.right === right) validMoves.push({ piece: p, side: 'right' });
+    });
+
+    if (validMoves.length > 0) {
+      // Pick a move (random for now, or heuristic)
+      // Simple heuristic: play doubles first, then highest value
+      validMoves.sort((a, b) => {
+        const isDoubleA = a.piece.left === a.piece.right;
+        const isDoubleB = b.piece.left === b.piece.right;
+        if (isDoubleA && !isDoubleB) return -1;
+        if (!isDoubleA && isDoubleB) return 1;
+        return (b.piece.left + b.piece.right) - (a.piece.left + a.piece.right);
+      });
+
+      const move = validMoves[0];
+      await playPiece(move.piece, move.side);
+    } else {
+      // No valid moves
+      if (room.config.piecesPerPlayer === 3 && room.drawPile && room.drawPile.length > 0) {
+        await buyPiece();
+      } else {
+        await passTurn();
+      }
+    }
+  };
+
   const generateRoomId = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
@@ -99,6 +228,104 @@ export function DominoGame({ onBack }: DominoGameProps) {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return result;
+  };
+
+  const startBotGame = async () => {
+    if (!playerName) {
+      setError('Digite seu nome');
+      return;
+    }
+
+    const newRoomId = generateRoomId();
+    
+    // Generate Deck
+    const deck: DominoPiece[] = [];
+    for (let i = 0; i <= 6; i++) {
+      for (let j = i; j <= 6; j++) {
+        deck.push({ left: i, right: j });
+      }
+    }
+
+    // Shuffle
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+
+    // Create Players (Human + 1 Bot)
+    const humanHand = deck.splice(0, piecesConfig);
+    const botHand = deck.splice(0, piecesConfig);
+
+    const players: Player[] = [
+      {
+        id: playerId,
+        name: playerName,
+        hand: humanHand,
+        score: 0
+      },
+      {
+        id: 'bot-1',
+        name: 'Robô',
+        hand: botHand,
+        score: 0,
+        isBot: true
+      }
+    ];
+
+    // Determine who starts (Prioritize 6:6)
+    let startIndex = 0;
+    let foundDoubleSix = false;
+    
+    // First check for 6:6
+    players.forEach((p, idx) => {
+      if (p.hand.some(piece => piece.left === 6 && piece.right === 6)) {
+        startIndex = idx;
+        foundDoubleSix = true;
+      }
+    });
+
+    // If no 6:6, check for other doubles or random
+    if (!foundDoubleSix) {
+      let maxDouble = -1;
+      players.forEach((p, idx) => {
+        p.hand.forEach(piece => {
+          if (piece.left === piece.right && piece.left > maxDouble) {
+            maxDouble = piece.left;
+            startIndex = idx;
+          }
+        });
+      });
+      
+      if (maxDouble === -1) {
+        startIndex = Math.floor(Math.random() * players.length);
+      }
+    }
+
+    const newRoom: GameRoom = {
+      id: newRoomId,
+      players: players,
+      status: 'playing',
+      config: {
+        piecesPerPlayer: piecesConfig
+      },
+      board: [],
+      drawPile: deck,
+      currentTurnIndex: startIndex,
+      leftEnd: null,
+      rightEnd: null,
+      consecutivePasses: 0,
+      lastAction: 'Jogo contra Bot iniciado!',
+      turnDeadline: Date.now() + 60000 // 1 minute
+    };
+
+    try {
+      await set(ref(database, `rooms/${newRoomId}`), newRoom);
+      setRoom(newRoom);
+      setView('game');
+    } catch (e) {
+      console.error(e);
+      setError('Erro ao iniciar jogo com bot.');
+    }
   };
 
   const createRoom = async () => {
@@ -251,12 +478,15 @@ export function DominoGame({ onBack }: DominoGameProps) {
       return;
     }
 
-    // Optimistic check
-    const playerIndex = room.players.findIndex(p => p.id === playerId);
-    if (playerIndex === -1 || room.currentTurnIndex !== playerIndex) return;
+    // Optimistic check (allow bot or current player)
+    const currentPlayer = room.players[room.currentTurnIndex];
+    const isBotTurn = currentPlayer.isBot;
+    
+    // If it's human turn, check ID. If bot turn, allow execution (since we are the host)
+    if (!isBotTurn && currentPlayer.id !== playerId) return;
     
     if (!room.drawPile || room.drawPile.length === 0) {
-      setError('Monte vazio!');
+      if (!isBotTurn) setError('Monte vazio!');
       return;
     }
 
@@ -265,6 +495,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
     
     if (!piece) return;
 
+    const playerIndex = room.currentTurnIndex;
     const player = room.players[playerIndex];
     const newHand = [...(player.hand || []), piece];
     
@@ -280,12 +511,15 @@ export function DominoGame({ onBack }: DominoGameProps) {
 
   const passTurn = async () => {
     if (!room) return;
-    const playerIndex = room.players.findIndex(p => p.id === playerId);
-    if (playerIndex === -1 || room.currentTurnIndex !== playerIndex) return;
+    
+    const currentPlayer = room.players[room.currentTurnIndex];
+    const isBotTurn = currentPlayer.isBot;
+
+    if (!isBotTurn && currentPlayer.id !== playerId) return;
 
     // Rule: must buy until you can play IF piecesPerPlayer is 3 and pile not empty
     if (room.config.piecesPerPlayer === 3 && room.drawPile && room.drawPile.length > 0) {
-      setError('Você deve comprar peças!');
+      if (!isBotTurn) setError('Você deve comprar peças!');
       return;
     }
 
@@ -294,7 +528,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
     
     let updates: any = {
       currentTurnIndex: nextTurn,
-      lastAction: `${room.players[playerIndex].name} passou a vez.`,
+      lastAction: `${currentPlayer.name} passou a vez.`,
       consecutivePasses: newConsecutivePasses
     };
 
@@ -324,10 +558,15 @@ export function DominoGame({ onBack }: DominoGameProps) {
   const playPiece = async (piece: DominoPiece, side: 'left' | 'right') => {
     if (!room) return;
     
-    const playerIndex = room.players.findIndex(p => p.id === playerId);
-    if (playerIndex === -1 || room.currentTurnIndex !== playerIndex) return;
+    const currentPlayer = room.players[room.currentTurnIndex];
+    const isBotTurn = currentPlayer.isBot;
 
+    if (!isBotTurn && currentPlayer.id !== playerId) return;
+
+    const playerIndex = room.currentTurnIndex;
     const player = room.players[playerIndex];
+    
+    // Find piece index in hand (handle both orientations in hand)
     const pieceIndex = player.hand.findIndex(p => 
       (p.left === piece.left && p.right === piece.right) || 
       (p.left === piece.right && p.right === piece.left)
@@ -356,8 +595,10 @@ export function DominoGame({ onBack }: DominoGameProps) {
         } else if (playedPiece.left === newLeftEnd) {
           playedPiece = { left: playedPiece.right, right: playedPiece.left };
         } else {
-          setError('Jogada inválida!');
-          setTimeout(() => setError(''), 2000);
+          if (!isBotTurn) {
+            setError('Jogada inválida!');
+            setTimeout(() => setError(''), 2000);
+          }
           return;
         }
         
@@ -372,8 +613,10 @@ export function DominoGame({ onBack }: DominoGameProps) {
         } else if (playedPiece.right === newRightEnd) {
           playedPiece = { left: playedPiece.right, right: playedPiece.left };
         } else {
-          setError('Jogada inválida!');
-          setTimeout(() => setError(''), 2000);
+          if (!isBotTurn) {
+            setError('Jogada inválida!');
+            setTimeout(() => setError(''), 2000);
+          }
           return;
         }
 
@@ -398,13 +641,25 @@ export function DominoGame({ onBack }: DominoGameProps) {
       rightEnd: newRightEnd,
       currentTurnIndex: (room.currentTurnIndex + 1) % room.players.length,
       lastAction: `${player.name} jogou [${playedPiece.left}|${playedPiece.right}]`,
-      consecutivePasses: 0 // Reset pass counter on successful play
+      consecutivePasses: 0, // Reset pass counter on successful play
+      turnDeadline: Date.now() + 60000 // Reset timer
     };
 
     if (newHand.length === 0) {
       updates.status = 'finished';
-      updates.winner = player;
-      updates.lastAction = `${player.name} venceu a partida!`;
+      
+      // Calculate points from losers
+      let totalPoints = 0;
+      room.players.forEach((p, idx) => {
+        if (idx !== playerIndex) {
+           totalPoints += (p.hand || []).reduce((sum, piece) => sum + piece.left + piece.right, 0);
+        }
+      });
+
+      updatedPlayers[playerIndex].score += totalPoints;
+      updates.players = updatedPlayers;
+      updates.winner = updatedPlayers[playerIndex];
+      updates.lastAction = `${player.name} bateu! (+${totalPoints} pts)`;
     }
 
     await update(ref(database, `rooms/${room.id}`), updates);
@@ -515,7 +770,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
     const left = room.leftEnd;
     const right = room.rightEnd;
 
-    return player.hand.some(p => 
+    return (player.hand || []).some(p => 
       p.left === left || p.right === left || p.left === right || p.right === right
     );
   };
@@ -592,6 +847,14 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   className="w-full bg-[#f0d0a0] hover:bg-[#e0c090] text-black font-bold py-4 rounded-xl shadow-[0px_4px_0px_0px_#b09060] active:shadow-none active:translate-y-[4px] transition-all mt-4"
                 >
                   Criar Sala
+                </button>
+
+                <button
+                  onClick={startBotGame}
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-[0px_4px_0px_0px_#1e40af] active:shadow-none active:translate-y-[4px] transition-all mt-2 flex items-center justify-center gap-2"
+                >
+                  <Users size={20} />
+                  Jogar contra Bot
                 </button>
 
                 <div className="relative flex py-2 items-center">
@@ -780,14 +1043,45 @@ export function DominoGame({ onBack }: DominoGameProps) {
               </AnimatePresence>
 
               {/* Game Board Area */}
-              <div className="flex-1 rounded-xl m-2 flex items-center relative overflow-hidden p-4 shadow-inner bg-[#11301c]">
+              <div ref={boardRef} className="flex-1 rounded-xl m-2 flex items-center justify-center relative overflow-hidden p-4 shadow-inner bg-[#11301c]">
                 {(!room.board || room.board.length === 0) ? (
-                  <div className="w-full text-white/20 font-bold text-2xl uppercase tracking-widest text-center">
-                    {isMyTurn ? "Sua vez de começar!" : "Aguardando início..."}
+                  <div 
+                    ref={leftZoneRef} // Use left zone as the single drop zone for empty board
+                    onClick={() => {
+                      if (selectedPiece) {
+                        playPiece(selectedPiece, 'left');
+                        setSelectedPiece(null);
+                      }
+                    }}
+                    className={cn(
+                      "w-64 h-32 border-4 border-dashed rounded-xl flex items-center justify-center transition-all cursor-pointer",
+                      (isDragging || selectedPiece) ? "border-[#f0d0a0] bg-[#f0d0a0]/20 scale-105 animate-pulse" : "border-white/10"
+                    )}
+                  >
+                    <div className="text-white/20 font-bold text-xl uppercase tracking-widest text-center pointer-events-none">
+                      {(isDragging || selectedPiece) ? "Toque aqui para jogar" : (isMyTurn ? "Sua vez!" : "Aguardando...")}
+                    </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-1 overflow-x-auto w-full h-full px-8">
-                    <div className="flex items-center gap-0.5 mx-auto">
+                  <div className="w-full h-full overflow-auto flex items-center justify-center p-8">
+                    {/* Snake Layout Container - Adjusted max-width for wrapping */}
+                    <div className="flex flex-wrap items-center justify-center gap-1 max-w-[600px] md:max-w-[700px]">
+                      
+                      {/* Left Drop Zone */}
+                      <div 
+                        ref={leftZoneRef}
+                        onClick={() => {
+                          if (selectedPiece) {
+                            playPiece(selectedPiece, 'left');
+                            setSelectedPiece(null);
+                          }
+                        }}
+                        className={cn(
+                          "w-12 h-24 border-2 border-dashed rounded-lg flex-shrink-0 transition-all duration-300 cursor-pointer",
+                          (isDragging || selectedPiece) ? "opacity-100 border-[#f0d0a0] bg-[#f0d0a0]/20 scale-110 animate-pulse" : "opacity-0 w-0 border-transparent overflow-hidden"
+                        )}
+                      />
+
                       {room.board.map((item, index) => (
                         <motion.div
                           key={index}
@@ -798,6 +1092,21 @@ export function DominoGame({ onBack }: DominoGameProps) {
                           {renderPiece(item.piece, true, item.orientation)}
                         </motion.div>
                       ))}
+
+                      {/* Right Drop Zone */}
+                      <div 
+                        ref={rightZoneRef}
+                        onClick={() => {
+                          if (selectedPiece) {
+                            playPiece(selectedPiece, 'right');
+                            setSelectedPiece(null);
+                          }
+                        }}
+                        className={cn(
+                          "w-12 h-24 border-2 border-dashed rounded-lg flex-shrink-0 transition-all duration-300 cursor-pointer",
+                          (isDragging || selectedPiece) ? "opacity-100 border-[#f0d0a0] bg-[#f0d0a0]/20 scale-110 animate-pulse" : "opacity-0 w-0 border-transparent overflow-hidden"
+                        )}
+                      />
                     </div>
                   </div>
                 )}
@@ -817,10 +1126,16 @@ export function DominoGame({ onBack }: DominoGameProps) {
               </div>
 
               {/* Player Hand & Controls */}
-              <div className="bg-black/80 border-t border-[#f0d0a0]/30 p-4 pb-8 backdrop-blur-md">
+              <div className={cn(
+                "bg-black/80 border-t border-[#f0d0a0]/30 p-4 pb-8 backdrop-blur-md relative z-20 transition-all duration-500",
+                isMyTurn && "bg-[#f0d0a0]/10 shadow-[0_-4px_20px_rgba(240,208,160,0.2)]" // Highlight active hand
+              )}>
                 <div className="flex justify-between items-center mb-4 px-2">
-                  <p className="text-xs text-[#f0d0a0] uppercase font-bold">
-                    {isMyTurn ? "Sua Vez!" : "Aguarde..."}
+                  <p className={cn(
+                    "text-xs uppercase font-bold transition-colors",
+                    isMyTurn ? "text-[#f0d0a0] animate-pulse" : "text-white/50"
+                  )}>
+                    {isMyTurn ? "Sua Vez! Arraste uma peça para a mesa" : "Aguarde..."}
                   </p>
                   
                   {isMyTurn && !hasValidMove && (
@@ -846,45 +1161,75 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   )}
                 </div>
 
-                <div className="flex justify-center gap-3 overflow-x-auto pb-4 px-4 min-h-[120px]">
+                <div className="flex justify-center gap-3 overflow-x-auto pb-4 px-4 min-h-[140px] items-end">
                   {room.players.find(p => p.id === playerId)?.hand?.map((piece, i) => (
-                    <motion.button
+                    <motion.div
                       key={i}
-                      whileHover={{ y: -15, scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
+                      drag={isMyTurn}
+                      dragSnapToOrigin
+                      dragElastic={0.1}
+                      dragMomentum={false}
                       onClick={() => {
+                        if (isMyTurn) {
+                           if (selectedPiece === piece) {
+                             setSelectedPiece(null); // Deselect
+                           } else {
+                             setSelectedPiece(piece); // Select
+                           }
+                        }
+                      }}
+                      onDragStart={() => {
+                        setIsDragging(true);
+                        setSelectedPiece(piece); // Auto-select on drag
+                      }}
+                      onDragEnd={(_, info) => {
+                        setIsDragging(false);
                         if (!isMyTurn) return;
+
+                        const dropPoint = { x: info.point.x, y: info.point.y };
                         
-                        const leftEnd = room.leftEnd;
-                        const rightEnd = room.rightEnd;
-                        
-                        if (!room.board || room.board.length === 0) {
-                           playPiece(piece, 'left');
-                           return;
+                        // Check collision with Left Zone
+                        if (leftZoneRef.current) {
+                          const rect = leftZoneRef.current.getBoundingClientRect();
+                          // Expand hit area slightly for better UX
+                          const padding = 50; 
+                          if (
+                            dropPoint.x >= rect.left - padding && 
+                            dropPoint.x <= rect.right + padding && 
+                            dropPoint.y >= rect.top - padding && 
+                            dropPoint.y <= rect.bottom + padding
+                          ) {
+                            playPiece(piece, 'left');
+                            setSelectedPiece(null);
+                            return;
+                          }
                         }
 
-                        const matchesLeft = piece.left === leftEnd || piece.right === leftEnd;
-                        const matchesRight = piece.left === rightEnd || piece.right === rightEnd;
-
-                        if (matchesLeft && matchesRight && leftEnd !== rightEnd) {
-                          const side = confirm("Jogar na esquerda?") ? 'left' : 'right';
-                          playPiece(piece, side);
-                        } else if (matchesLeft) {
-                           playPiece(piece, 'left');
-                        } else if (matchesRight) {
-                           playPiece(piece, 'right');
-                        } else {
-                          setError("Essa peça não encaixa!");
-                          setTimeout(() => setError(''), 2000);
+                        // Check collision with Right Zone
+                        if (rightZoneRef.current) {
+                          const rect = rightZoneRef.current.getBoundingClientRect();
+                          const padding = 50;
+                          if (
+                            dropPoint.x >= rect.left - padding && 
+                            dropPoint.x <= rect.right + padding && 
+                            dropPoint.y >= rect.top - padding && 
+                            dropPoint.y <= rect.bottom + padding
+                          ) {
+                            playPiece(piece, 'right');
+                            setSelectedPiece(null);
+                            return;
+                          }
                         }
                       }}
                       className={cn(
-                        "cursor-pointer transition-all relative flex-shrink-0",
-                        !isMyTurn && "opacity-50 cursor-not-allowed grayscale"
+                        "relative flex-shrink-0 touch-none transition-all duration-300 cursor-pointer", 
+                        isMyTurn ? "brightness-125 drop-shadow-[0_0_15px_rgba(240,208,160,0.6)] scale-105 ring-2 ring-[#f0d0a0]/50" : "opacity-50 cursor-not-allowed grayscale scale-95",
+                        selectedPiece === piece && "ring-4 ring-green-500 -translate-y-4 z-50" // Visual feedback for selection
                       )}
+                      style={{ zIndex: (isDragging || selectedPiece === piece) ? 50 : 1 }}
                     >
                       {renderPiece(piece, false, 'vertical')}
-                    </motion.button>
+                    </motion.div>
                   ))}
                 </div>
               </div>
