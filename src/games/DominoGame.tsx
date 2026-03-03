@@ -72,7 +72,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
   useEffect(() => {
     if (!room) return;
     
-    const containerWidth = Math.min(window.innerWidth - 32, 800); // Max width 800px
+    const containerWidth = Math.max(300, boardWidth - 40); // Use actual board width
     const pieces = room.board || [];
     
     // If empty board
@@ -186,7 +186,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
     setZonePositions({ left: leftZone, right: rightZone });
     setBoardHeight(maxY + offsetY + 100);
 
-  }, [room?.board, window.innerWidth]);
+  }, [room?.board, boardWidth]);
 
 
   const renderZone = (side: 'left' | 'right') => {
@@ -211,9 +211,21 @@ export function DominoGame({ onBack }: DominoGameProps) {
       </div>
     );
   };
+  const [boardWidth, setBoardWidth] = useState(window.innerWidth);
   const leftZoneRef = useRef<HTMLDivElement>(null);
   const rightZoneRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!boardRef.current) return;
+    const observer = new ResizeObserver(entries => {
+      for (let entry of entries) {
+        setBoardWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(boardRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (playerName) {
@@ -359,17 +371,17 @@ export function DominoGame({ onBack }: DominoGameProps) {
       });
 
       const move = validMoves[0];
-      await playPiece(move.piece, move.side);
+      await playPiece(move.piece, move.side, true); // Bypass processing for Bot
     } else {
       // No valid moves
       if (room.config.piecesPerPlayer === 3 && room.drawPile && room.drawPile.length > 0) {
-        const success = await buyPiece();
+        const success = await buyPiece(true); // Bypass processing for Bot
         if (!success) {
            // If buy failed (e.g. empty pile race condition), pass turn
-           await passTurn();
+           await passTurn(false, true); // Force=false, Bypass=true
         }
       } else {
-        await passTurn();
+        await passTurn(false, true); // Force=false, Bypass=true
       }
     }
   };
@@ -622,8 +634,8 @@ export function DominoGame({ onBack }: DominoGameProps) {
     });
   };
 
-  const buyPiece = async (): Promise<boolean> => {
-    if (!room || isProcessing) return false;
+  const buyPiece = async (bypassProcessing = false): Promise<boolean> => {
+    if (!room || (isProcessing && !bypassProcessing)) return false;
     
     // Only allowed if piecesPerPlayer is 3
     if (room.config.piecesPerPlayer !== 3) {
@@ -672,8 +684,8 @@ export function DominoGame({ onBack }: DominoGameProps) {
     }
   };
 
-  const passTurn = async (forcePass: boolean = false) => {
-    if (!room || isProcessing) return;
+  const passTurn = async (forcePass: boolean = false, bypassProcessing = false) => {
+    if (!room || (isProcessing && !bypassProcessing)) return;
     
     const currentPlayer = room.players[room.currentTurnIndex];
     const isBotTurn = currentPlayer.isBot;
@@ -727,8 +739,8 @@ export function DominoGame({ onBack }: DominoGameProps) {
     }
   };
 
-  const playPiece = async (piece: DominoPiece, side: 'left' | 'right') => {
-    if (!room || isProcessing) return;
+  const playPiece = async (piece: DominoPiece, side: 'left' | 'right', bypassProcessing = false) => {
+    if (!room || (isProcessing && !bypassProcessing)) return;
     
     const currentPlayer = room.players[room.currentTurnIndex];
     const isBotTurn = currentPlayer.isBot;
