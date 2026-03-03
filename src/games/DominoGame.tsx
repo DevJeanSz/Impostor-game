@@ -727,18 +727,30 @@ export function DominoGame({ onBack }: DominoGameProps) {
     );
   };
 
-  const renderPiece = (piece: DominoPiece, isSmall = false, orientation: 'vertical' | 'horizontal' = 'vertical') => {
+  const renderPiece = (piece: DominoPiece, isSmall = false, orientation: 'vertical' | 'horizontal' = 'vertical', scale = 1) => {
     const isHorizontal = orientation === 'horizontal';
     
     // Dimensions based on size and orientation
     // Small (Board): Vertical 24x48 (w-6 h-12), Horizontal 48x24 (w-12 h-6)
     // Large (Hand): Vertical 48x96 (w-12 h-24)
     
+    let baseWidth = isSmall ? (isHorizontal ? 48 : 24) : (isHorizontal ? 96 : 48);
+    let baseHeight = isSmall ? (isHorizontal ? 24 : 48) : (isHorizontal ? 48 : 96);
+
+    // Apply scale
+    const width = baseWidth * scale;
+    const height = baseHeight * scale;
+    
+    // Tailwind classes for size are static, so we use inline styles for dynamic scaling if needed, 
+    // or just stick to a few preset sizes.
+    // Let's use a "mobile-friendly" size for hand pieces.
+
     let sizeClass = "";
     if (isSmall) {
       sizeClass = isHorizontal ? "w-12 h-6" : "w-6 h-12";
     } else {
-      sizeClass = isHorizontal ? "w-24 h-12" : "w-12 h-24";
+      // Hand pieces: smaller on mobile, larger on desktop
+      sizeClass = isHorizontal ? "w-16 h-8 md:w-24 md:h-12" : "w-8 h-16 md:w-12 md:h-24";
     }
 
     return (
@@ -1065,7 +1077,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                 ) : (
                   <div className="w-full h-full overflow-auto flex items-center justify-center p-8">
                     {/* Snake Layout Container - Adjusted max-width for wrapping */}
-                    <div className="flex flex-wrap items-center justify-center gap-1 max-w-[600px] md:max-w-[700px]">
+                    <div className="flex flex-wrap items-center justify-center max-w-[600px] md:max-w-[700px]">
                       
                       {/* Left Drop Zone */}
                       <div 
@@ -1077,17 +1089,19 @@ export function DominoGame({ onBack }: DominoGameProps) {
                           }
                         }}
                         className={cn(
-                          "w-12 h-24 border-2 border-dashed rounded-lg flex-shrink-0 transition-all duration-300 cursor-pointer",
+                          "w-12 h-24 border-2 border-dashed rounded-lg flex-shrink-0 transition-all duration-300 cursor-pointer flex items-center justify-center",
                           (isDragging || selectedPiece) ? "opacity-100 border-[#f0d0a0] bg-[#f0d0a0]/20 scale-110 animate-pulse" : "opacity-0 w-0 border-transparent overflow-hidden"
                         )}
-                      />
+                      >
+                         {(isDragging || selectedPiece) && <div className="w-8 h-8 rounded-full bg-[#f0d0a0]/50 animate-ping" />}
+                      </div>
 
                       {room.board.map((item, index) => (
                         <motion.div
                           key={index}
                           initial={{ scale: 0 }}
                           animate={{ scale: 1 }}
-                          className="flex-shrink-0"
+                          className="flex-shrink-0 -ml-[1px] -mt-[1px]" // Negative margin to overlap borders slightly and remove gaps
                         >
                           {renderPiece(item.piece, true, item.orientation)}
                         </motion.div>
@@ -1103,10 +1117,12 @@ export function DominoGame({ onBack }: DominoGameProps) {
                           }
                         }}
                         className={cn(
-                          "w-12 h-24 border-2 border-dashed rounded-lg flex-shrink-0 transition-all duration-300 cursor-pointer",
+                          "w-12 h-24 border-2 border-dashed rounded-lg flex-shrink-0 transition-all duration-300 cursor-pointer flex items-center justify-center",
                           (isDragging || selectedPiece) ? "opacity-100 border-[#f0d0a0] bg-[#f0d0a0]/20 scale-110 animate-pulse" : "opacity-0 w-0 border-transparent overflow-hidden"
                         )}
-                      />
+                      >
+                        {(isDragging || selectedPiece) && <div className="w-8 h-8 rounded-full bg-[#f0d0a0]/50 animate-ping" />}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1161,7 +1177,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   )}
                 </div>
 
-                <div className="flex justify-center gap-3 overflow-x-auto pb-4 px-4 min-h-[140px] items-end">
+                <div className="flex flex-wrap justify-center gap-2 pb-4 px-4 min-h-[140px] items-center overflow-y-auto max-h-[200px]">
                   {room.players.find(p => p.id === playerId)?.hand?.map((piece, i) => (
                     <motion.div
                       key={i}
