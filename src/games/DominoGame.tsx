@@ -61,6 +61,22 @@ export function DominoGame({ onBack }: DominoGameProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPiece, setSelectedPiece] = useState<DominoPiece | null>(null);
   
+  const [boardWidth, setBoardWidth] = useState(window.innerWidth);
+  const leftZoneRef = useRef<HTMLDivElement>(null);
+  const rightZoneRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!boardRef.current) return;
+    const observer = new ResizeObserver(entries => {
+      for (let entry of entries) {
+        setBoardWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(boardRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   // Layout Constants
   const PIECE_WIDTH = 60;  // Reduced size for better fit
   const PIECE_HEIGHT = 30;
@@ -213,21 +229,6 @@ export function DominoGame({ onBack }: DominoGameProps) {
       </div>
     );
   };
-  const [boardWidth, setBoardWidth] = useState(window.innerWidth);
-  const leftZoneRef = useRef<HTMLDivElement>(null);
-  const rightZoneRef = useRef<HTMLDivElement>(null);
-  const boardRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!boardRef.current) return;
-    const observer = new ResizeObserver(entries => {
-      for (let entry of entries) {
-        setBoardWidth(entry.contentRect.width);
-      }
-    });
-    observer.observe(boardRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     if (playerName) {
