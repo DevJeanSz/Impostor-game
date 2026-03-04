@@ -28,6 +28,7 @@ interface GameRoom {
   status: 'waiting' | 'playing' | 'finished';
   config: {
     piecesPerPlayer: number;
+    difficulty?: 'easy' | 'medium' | 'hard';
   };
   board: { piece: DominoPiece; ownerId: string; orientation?: 'vertical' | 'horizontal' }[];
   drawPile: DominoPiece[];
@@ -45,6 +46,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
   const [playerName, setPlayerName] = useState(() => localStorage.getItem('domino_player_name') || '');
   const [roomIdInput, setRoomIdInput] = useState('');
   const [piecesConfig, setPiecesConfig] = useState(6);
+  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [error, setError] = useState('');
   const [timeLeft, setTimeLeft] = useState(60);
   const [playerId, setPlayerId] = useState(() => {
@@ -360,18 +362,37 @@ export function DominoGame({ onBack }: DominoGameProps) {
     });
 
     if (validMoves.length > 0) {
-      // Pick a move (random for now, or heuristic)
-      // Simple heuristic: play doubles first, then highest value
-      validMoves.sort((a, b) => {
-        const isDoubleA = a.piece.left === a.piece.right;
-        const isDoubleB = b.piece.left === b.piece.right;
-        if (isDoubleA && !isDoubleB) return -1;
-        if (!isDoubleA && isDoubleB) return 1;
-        return (b.piece.left + b.piece.right) - (a.piece.left + a.piece.right);
-      });
+      const difficulty = room.config.difficulty || 'medium';
 
-      const move = validMoves[0];
-      await playPiece(move.piece, move.side, true); // Bypass processing for Bot
+      if (difficulty === 'easy') {
+        // Random
+        const randomIndex = Math.floor(Math.random() * validMoves.length);
+        const move = validMoves[randomIndex];
+        await playPiece(move.piece, move.side, true);
+      } else if (difficulty === 'medium') {
+        // Doubles first, then random
+        const doubles = validMoves.filter(m => m.piece.left === m.piece.right);
+        if (doubles.length > 0) {
+           const randomIndex = Math.floor(Math.random() * doubles.length);
+           const move = doubles[randomIndex];
+           await playPiece(move.piece, move.side, true);
+        } else {
+           const randomIndex = Math.floor(Math.random() * validMoves.length);
+           const move = validMoves[randomIndex];
+           await playPiece(move.piece, move.side, true);
+        }
+      } else {
+        // Hard (Current Logic: Doubles -> Highest Value)
+        validMoves.sort((a, b) => {
+          const isDoubleA = a.piece.left === a.piece.right;
+          const isDoubleB = b.piece.left === b.piece.right;
+          if (isDoubleA && !isDoubleB) return -1;
+          if (!isDoubleA && isDoubleB) return 1;
+          return (b.piece.left + b.piece.right) - (a.piece.left + a.piece.right);
+        });
+        const move = validMoves[0];
+        await playPiece(move.piece, move.side, true);
+      }
     } else {
       // No valid moves
       if (room.config.piecesPerPlayer === 3 && room.drawPile && room.drawPile.length > 0) {
@@ -471,7 +492,8 @@ export function DominoGame({ onBack }: DominoGameProps) {
       players: players,
       status: 'playing',
       config: {
-        piecesPerPlayer: piecesConfig
+        piecesPerPlayer: piecesConfig,
+        difficulty: difficulty
       },
       board: [],
       drawPile: deck,
@@ -510,7 +532,8 @@ export function DominoGame({ onBack }: DominoGameProps) {
       }],
       status: 'waiting',
       config: {
-        piecesPerPlayer: piecesConfig
+        piecesPerPlayer: piecesConfig,
+        difficulty: difficulty
       },
       board: [],
       drawPile: [],
@@ -1046,6 +1069,28 @@ export function DominoGame({ onBack }: DominoGameProps) {
                           )}
                         >
                           {num}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-xs text-green-300 font-bold uppercase">Dificuldade</label>
+                    <div className="flex bg-black/30 rounded-xl p-1 border border-green-800">
+                      {[
+                        { label: 'Fácil', value: 'easy' },
+                        { label: 'Médio', value: 'medium' },
+                        { label: 'Difícil', value: 'hard' }
+                      ].map(level => (
+                        <button
+                          key={level.value}
+                          onClick={() => setDifficulty(level.value as any)}
+                          className={cn(
+                            "flex-1 py-2 rounded-lg text-xs font-bold transition-all",
+                            difficulty === level.value ? "bg-[#f0d0a0] text-black shadow-lg" : "text-green-400 hover:text-green-200"
+                          )}
+                        >
+                          {level.label}
                         </button>
                       ))}
                     </div>

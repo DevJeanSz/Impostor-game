@@ -4,13 +4,14 @@ import { Plus, X, User, Play, Trash2, Minus } from 'lucide-react';
 import { cn, CATEGORIES } from '../lib/utils';
 
 interface SetupScreenProps {
-  onStartGame: (players: string[], impostorCount: number) => void;
+  onStartGame: (players: string[], impostorCount: number, difficulty: 'easy' | 'medium' | 'hard') => void;
 }
 
 export function SetupScreen({ onStartGame }: SetupScreenProps) {
   const [players, setPlayers] = useState<string[]>([]);
   const [newName, setNewName] = useState('');
   const [impostorCount, setImpostorCount] = useState(1);
+  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
 
   const [showConfirmClear, setShowConfirmClear] = useState(false);
   
@@ -56,9 +57,9 @@ export function SetupScreen({ onStartGame }: SetupScreenProps) {
   };
 
   const handleStart = () => {
-    console.log("handleStart called", { playersLength: players.length, impostorCount });
+    console.log("handleStart called", { playersLength: players.length, impostorCount, difficulty });
     if (players.length >= 3) {
-      onStartGame(players, impostorCount);
+      onStartGame(players, impostorCount, difficulty);
     } else {
       console.warn("Not enough players to start");
     }
@@ -199,6 +200,32 @@ export function SetupScreen({ onStartGame }: SetupScreenProps) {
             </p>
           </div>
         )}
+
+        <div className="w-full space-y-2 shrink-0">
+          <label className="text-sm font-medium text-slate-300 uppercase tracking-wider">
+            Dificuldade das Palavras
+          </label>
+          <div className="flex bg-slate-800 rounded-xl p-1 border border-slate-700">
+            {[
+              { label: 'Fácil', value: 'easy' },
+              { label: 'Médio', value: 'medium' },
+              { label: 'Difícil', value: 'hard' }
+            ].map(level => (
+              <button
+                key={level.value}
+                onClick={() => setDifficulty(level.value as any)}
+                className={cn(
+                  "flex-1 py-2 rounded-lg text-xs font-bold transition-all",
+                  difficulty === level.value 
+                    ? "bg-indigo-500 text-white shadow-lg" 
+                    : "text-slate-400 hover:text-slate-200"
+                )}
+              >
+                {level.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div className="w-full pt-4 shrink-0">
           <button

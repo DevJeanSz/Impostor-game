@@ -23,9 +23,9 @@ export function ImpostorGame({ onBack }: ImpostorGameProps) {
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [secretWord, setSecretWord] = useState<string>('');
 
-  const startGame = (playerNames: string[], impostorCount: number) => {
+  const startGame = (playerNames: string[], impostorCount: number, difficulty: 'easy' | 'medium' | 'hard' = 'medium') => {
     try {
-      console.log("Starting game with:", { playerNames, impostorCount });
+      console.log("Starting game with:", { playerNames, impostorCount, difficulty });
 
       if (!CATEGORIES || CATEGORIES.length === 0) {
         console.error("No categories found");
@@ -37,11 +37,28 @@ export function ImpostorGame({ onBack }: ImpostorGameProps) {
       const randomCategory = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
       console.log("Selected category:", randomCategory.name);
       
+      // Filter words based on difficulty
+      let difficultyWords = randomCategory.words;
+      
+      if (difficulty === 'easy') {
+        difficultyWords = randomCategory.words.filter(w => w.length <= 6);
+      } else if (difficulty === 'medium') {
+        difficultyWords = randomCategory.words.filter(w => w.length >= 7 && w.length <= 9);
+      } else if (difficulty === 'hard') {
+        difficultyWords = randomCategory.words.filter(w => w.length >= 10);
+      }
+
+      // Fallback if no words match difficulty (e.g. category has only short words)
+      if (difficultyWords.length === 0) {
+        console.warn(`No words found for difficulty ${difficulty} in category ${randomCategory.name}. Using all words.`);
+        difficultyWords = randomCategory.words;
+      }
+
       // Filter out used words for this category if possible
-      const availableWords = randomCategory.words.filter(w => !usedWords.includes(w));
+      const availableWords = difficultyWords.filter(w => !usedWords.includes(w));
       
       // If all words used, reset pool for this category (or just pick random if really stuck)
-      const wordPool = availableWords.length > 0 ? availableWords : randomCategory.words;
+      const wordPool = availableWords.length > 0 ? availableWords : difficultyWords;
       const word = wordPool[Math.floor(Math.random() * wordPool.length)];
       console.log("Selected word:", word);
       
