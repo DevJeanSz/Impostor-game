@@ -62,6 +62,9 @@ export function DominoGame({ onBack }: DominoGameProps) {
   const [selectedPiece, setSelectedPiece] = useState<DominoPiece | null>(null);
   
   const [boardWidth, setBoardWidth] = useState(window.innerWidth);
+  const [scale, setScale] = useState(1);
+  const [boardSize, setBoardSize] = useState({ width: 0, height: 0 });
+  
   const leftZoneRef = useRef<HTMLDivElement>(null);
   const rightZoneRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -90,7 +93,6 @@ export function DominoGame({ onBack }: DominoGameProps) {
   useEffect(() => {
     if (!room) return;
     
-    const containerWidth = Math.max(300, boardWidth - 40); // Use actual board width
     const pieces = room.board || [];
     
     // If empty board
@@ -100,6 +102,8 @@ export function DominoGame({ onBack }: DominoGameProps) {
          right: { left: '50%', top: '50%', transform: 'translate(50%, -50%)' } 
        });
        setLayoutPieces([]);
+       setBoardSize({ width: 300, height: 200 }); // Default size
+       setScale(1);
        return;
     }
     
@@ -108,11 +112,12 @@ export function DominoGame({ onBack }: DominoGameProps) {
     let x = 0; 
     let y = 0;
     let dir = 1; 
-    const maxRowWidth = containerWidth - 80; // Allow padding
+    const maxRowWidth = 1500; // Fixed large width for "infinite" feel before turning
     
     // Track bounds
     let minX = Infinity;
     let maxX = -Infinity;
+    let minY = Infinity;
     let maxY = -Infinity;
 
     for (let i = 0; i < pieces.length; i++) {
@@ -126,11 +131,11 @@ export function DominoGame({ onBack }: DominoGameProps) {
       
       let isTurn = false;
       if (dir === 1 && nextX > maxRowWidth) isTurn = true;
-      if (dir === -1 && nextX < 0) isTurn = true;
+      if (dir === -1 && nextX < -maxRowWidth) isTurn = true; // Symmetric limit
 
       if (isTurn) {
         const turnX = x + (dir === 1 ? -10 : 10); 
-        const turnY = y + 20; 
+        const turnY = y + 40; // Increased vertical gap
         
         tempLayout.push({
           ...piece,
@@ -140,10 +145,11 @@ export function DominoGame({ onBack }: DominoGameProps) {
         
         // Update bounds
         minX = Math.min(minX, turnX);
-        maxX = Math.max(maxX, turnX + 24); // 24 is vertical width
+        maxX = Math.max(maxX, turnX + 24);
+        minY = Math.min(minY, turnY);
         maxY = Math.max(maxY, turnY + 48);
 
-        y += 60; 
+        y = turnY + 40; // Move down
         dir *= -1; 
         x = turnX; 
         
@@ -163,20 +169,25 @@ export function DominoGame({ onBack }: DominoGameProps) {
         
         // Update bounds
         const pWidth = isVertical ? 30 : 60; 
+        const pHeight = isVertical ? 60 : 30;
         
         minX = Math.min(minX, x);
         maxX = Math.max(maxX, x + pWidth);
-        maxY = Math.max(maxY, y + 30);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y + pHeight);
 
         const advance = isVertical ? 30 : 55; 
         x += advance * dir;
       }
     }
     
-    // 2. Center the Layout
+    // 2. Normalize Coordinates (Shift to 0,0)
+    const padding = 60; // Internal padding
     const layoutWidth = maxX - minX;
-    const offsetX = (containerWidth - layoutWidth) / 2 - minX;
-    const offsetY = 40; // Top padding
+    const layoutHeight = maxY - minY;
+    
+    const offsetX = -minX + padding;
+    const offsetY = -minY + padding;
 
     const finalLayout = tempLayout.map(item => ({
       ...item,
@@ -187,14 +198,19 @@ export function DominoGame({ onBack }: DominoGameProps) {
       }
     }));
     
-    // 3. Calculate Zones
+    // 3. Calculate Zones relative to normalized layout
     const firstP = finalLayout[0];
+    const lastP = finalLayout[finalLayout.length - 1]; // Use last piece for right zone logic
     
+    // Left zone connects to the first piece (left end)
+    // We need to know orientation of first piece
     const leftZone = { 
       left: firstP.style.left - 70, 
       top: firstP.style.top 
     };
     
+    // Right zone connects to the last piece (right end)
+    // Logic depends on direction of last piece
     const rightZone = { 
       left: x + offsetX + (dir === 1 ? 10 : -70), 
       top: y + offsetY 
@@ -202,7 +218,21 @@ export function DominoGame({ onBack }: DominoGameProps) {
 
     setLayoutPieces(finalLayout);
     setZonePositions({ left: leftZone, right: rightZone });
-    setBoardHeight(maxY + offsetY + 100);
+    
+    const totalWidth = layoutWidth + (padding * 2);
+    const totalHeight = layoutHeight + (padding * 2);
+    setBoardSize({ width: totalWidth, height: totalHeight });
+
+    // 4. Calculate Scale
+    // Fit totalWidth into boardWidth (with some margin)
+    const availableWidth = boardWidth - 40;
+    const widthScale = Math.min(1, availableWidth / totalWidth);
+    
+    // Optional: also check height if needed, but usually width is the constraint for snake
+    // const availableHeight = window.innerHeight - 300;
+    // const heightScale = Math.min(1, availableHeight / totalHeight);
+    
+    setScale(widthScale);
 
   }, [room?.board, boardWidth]);
 
@@ -1319,9 +1349,16 @@ export function DominoGame({ onBack }: DominoGameProps) {
                     </div>
                   </div>
                 ) : (
-                  <div className="w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center justify-center p-4">
-                    {/* Absolute Layout Container */}
-                    <div className="relative w-full overflow-hidden bg-[#11301c] rounded-xl shadow-inner transition-all duration-300" style={{ height: boardHeight }}>
+                  <div className="w-full h-full overflow-hidden flex items-center justify-center">
+                    {/* Scaled Board Container */}
+                    <div 
+                      className="relative transition-all duration-500 ease-out origin-center bg-[#11301c] rounded-xl shadow-2xl" 
+                      style={{ 
+                        width: boardSize.width, 
+                        height: boardSize.height,
+                        transform: `scale(${scale})`
+                      }}
+                    >
                        {layoutPieces.map((item, index) => (
                           <motion.div
                             key={index}
