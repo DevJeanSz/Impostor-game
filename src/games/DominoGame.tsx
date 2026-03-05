@@ -228,11 +228,9 @@ export function DominoGame({ onBack }: DominoGameProps) {
     const availableWidth = boardWidth - 40;
     const widthScale = Math.min(1, availableWidth / totalWidth);
     
-    // Optional: also check height if needed, but usually width is the constraint for snake
-    // const availableHeight = window.innerHeight - 300;
-    // const heightScale = Math.min(1, availableHeight / totalHeight);
-    
-    setScale(widthScale);
+    // Limit zoom out to prevent pieces from disappearing
+    const minScale = 0.4;
+    setScale(Math.max(minScale, widthScale));
 
   }, [room?.board, boardWidth]);
 
@@ -1359,17 +1357,22 @@ export function DominoGame({ onBack }: DominoGameProps) {
                         transform: `scale(${scale})`
                       }}
                     >
-                       {layoutPieces.map((item, index) => (
-                          <motion.div
-                            key={index}
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            className="absolute origin-center"
-                            style={item.style}
-                          >
-                            {renderPiece(item.piece, true, item.isVertical ? 'vertical' : 'horizontal')}
-                          </motion.div>
-                       ))}
+                       {layoutPieces.map((item, index) => {
+                          const p = item.piece;
+                          const id = `piece-${Math.min(p.left, p.right)}-${Math.max(p.left, p.right)}`;
+                          return (
+                            <motion.div
+                              key={index}
+                              layoutId={id}
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              className="absolute origin-center"
+                              style={item.style}
+                            >
+                              {renderPiece(item.piece, true, item.isVertical ? 'vertical' : 'horizontal')}
+                            </motion.div>
+                          );
+                       })}
                        
                        {/* Drop Zones */}
                        <div className="absolute transition-all duration-300" style={zonePositions.left}>
@@ -1465,14 +1468,17 @@ export function DominoGame({ onBack }: DominoGameProps) {
                 </div>
 
                 <div className="flex flex-wrap justify-center gap-2 pb-4 px-4 min-h-[140px] items-center overflow-y-auto max-h-[200px]">
-                  {room.players.find(p => p.id === playerId)?.hand?.map((piece, i) => (
-                    <motion.div
-                      key={i}
-                      drag={isMyTurn}
-                      dragSnapToOrigin
-                      dragElastic={0.1}
-                      dragMomentum={false}
-                      onClick={() => {
+                  {room.players.find(p => p.id === playerId)?.hand?.map((piece, i) => {
+                    const id = `piece-${Math.min(piece.left, piece.right)}-${Math.max(piece.left, piece.right)}`;
+                    return (
+                      <motion.div
+                        key={id} // Use ID as key for stability
+                        layoutId={id}
+                        drag={isMyTurn}
+                        dragSnapToOrigin
+                        dragElastic={0.1}
+                        dragMomentum={false}
+                        onClick={() => {
                         if (isMyTurn) {
                            if (selectedPiece === piece) {
                              setSelectedPiece(null); // Deselect
@@ -1533,7 +1539,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                     >
                       {renderPiece(piece, false, 'vertical')}
                     </motion.div>
-                  ))}
+                  ); })}
                 </div>
               </div>
             </div>
