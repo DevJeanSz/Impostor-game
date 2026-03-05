@@ -112,7 +112,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
     let x = 0; 
     let y = 0;
     let dir = 1; 
-    const maxRowWidth = 1500; // Fixed large width for "infinite" feel before turning
+    const maxRowWidth = 600; // Reduced to 600px to force zigzag pattern visible on all screens
     
     // Track bounds
     let minX = Infinity;
@@ -134,8 +134,10 @@ export function DominoGame({ onBack }: DominoGameProps) {
       if (dir === -1 && nextX < -maxRowWidth) isTurn = true; // Symmetric limit
 
       if (isTurn) {
-        const turnX = x + (dir === 1 ? -10 : 10); 
-        const turnY = y + 40; // Increased vertical gap
+        // Place the turn piece (Vertical)
+        // Adjust position to create a nice corner
+        const turnX = x + (dir === 1 ? 0 : 0); 
+        const turnY = y + 20; // Slight drop for the corner piece
         
         tempLayout.push({
           ...piece,
@@ -149,9 +151,10 @@ export function DominoGame({ onBack }: DominoGameProps) {
         minY = Math.min(minY, turnY);
         maxY = Math.max(maxY, turnY + 48);
 
-        y = turnY + 40; // Move down
-        dir *= -1; 
-        x = turnX; 
+        // Prepare for next row
+        y = turnY + 45; // Move down for next row
+        dir *= -1; // Flip direction
+        x = turnX; // Start next row from this X
         
       } else {
         const isVertical = isDouble; 
