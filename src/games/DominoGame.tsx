@@ -109,10 +109,14 @@ export function DominoGame({ onBack }: DominoGameProps) {
     
     // 1. Generate Layout (0-based)
     const tempLayout: any[] = [];
-    let x = 0; 
-    let y = 0;
-    let dir = 1; 
-    const maxRowWidth = 600; // Reduced to 600px to force zigzag pattern visible on all screens
+    const PW = 60;
+    const PH = 30;
+    const G = 2; // Small gap
+    const maxRowWidth = 600;
+
+    let currentX = 0;
+    let currentY = 0;
+    let dir = 1; // 1 = right, -1 = left
     
     // Track bounds
     let minX = Infinity;
@@ -124,68 +128,60 @@ export function DominoGame({ onBack }: DominoGameProps) {
       const piece = pieces[i];
       const isDouble = piece.piece.left === piece.piece.right;
       
-      let width = isDouble ? PIECE_HEIGHT : PIECE_WIDTH; 
+      let w = isDouble ? PH : PW; 
+      let h = isDouble ? PW : PH; 
       
-      // Check bounds for wrapping
-      const nextX = x + ((width + GAP) * dir);
-      
+      // Check if we need to turn
       let isTurn = false;
-      if (dir === 1 && nextX > maxRowWidth) isTurn = true;
-      if (dir === -1 && nextX < -maxRowWidth) isTurn = true; // Symmetric limit
+      if (dir === 1 && currentX + w > maxRowWidth) isTurn = true;
+      if (dir === -1 && currentX - w < -maxRowWidth) isTurn = true;
 
       if (isTurn) {
-        // Place the turn piece (Vertical)
-        // Adjust position to create a nice corner
-        const turnX = x + (dir === 1 ? 0 : 0); 
-        const turnY = y + 20; // Slight drop for the corner piece
+        // Render this piece vertically as a corner
+        const cornerW = PH; 
+        const cornerH = PW; 
+        
+        let placeX = dir === 1 ? currentX - cornerW : currentX;
+        let placeY = currentY + PH + G;
         
         tempLayout.push({
           ...piece,
-          style: { left: turnX, top: turnY, transform: 'rotate(0deg)', zIndex: i },
-          isVertical: true
+          style: { left: placeX, top: placeY, zIndex: i },
+          renderOrientation: 'vertical'
         });
         
         // Update bounds
-        minX = Math.min(minX, turnX);
-        maxX = Math.max(maxX, turnX + 24);
-        minY = Math.min(minY, turnY);
-        maxY = Math.max(maxY, turnY + 48);
+        minX = Math.min(minX, placeX);
+        maxX = Math.max(maxX, placeX + cornerW);
+        minY = Math.min(minY, placeY);
+        maxY = Math.max(maxY, placeY + cornerH);
 
-        // Prepare for next row
-        y = turnY + 45; // Move down for next row
-        dir *= -1; // Flip direction
-        x = turnX; // Start next row from this X
-        
+        // Update for next row
+        currentY = placeY + cornerH + G;
+        dir *= -1;
+        currentX = dir === 1 ? placeX + cornerW + G : placeX - G;
       } else {
-        const isVertical = isDouble; 
+        let placeX = dir === 1 ? currentX : currentX - w;
+        let placeY = isDouble ? currentY - (PW - PH)/2 : currentY; // Center double vertically
         
         tempLayout.push({
           ...piece,
-          style: { 
-            left: x, 
-            top: y, 
-            transform: isVertical ? 'rotate(0deg)' : 'rotate(90deg)', 
-            zIndex: i 
-          },
-          isVertical
+          style: { left: placeX, top: placeY, zIndex: i },
+          renderOrientation: isDouble ? 'vertical' : 'horizontal'
         });
         
         // Update bounds
-        const pWidth = isVertical ? 30 : 60; 
-        const pHeight = isVertical ? 60 : 30;
-        
-        minX = Math.min(minX, x);
-        maxX = Math.max(maxX, x + pWidth);
-        minY = Math.min(minY, y);
-        maxY = Math.max(maxY, y + pHeight);
+        minX = Math.min(minX, placeX);
+        maxX = Math.max(maxX, placeX + w);
+        minY = Math.min(minY, placeY);
+        maxY = Math.max(maxY, placeY + h);
 
-        const advance = isVertical ? 30 : 55; 
-        x += advance * dir;
+        currentX = dir === 1 ? currentX + w + G : currentX - w - G;
       }
     }
     
     // 2. Normalize Coordinates (Shift to 0,0)
-    const padding = 60; // Internal padding
+    const padding = 80; // Internal padding
     const layoutWidth = maxX - minX;
     const layoutHeight = maxY - minY;
     
@@ -203,20 +199,17 @@ export function DominoGame({ onBack }: DominoGameProps) {
     
     // 3. Calculate Zones relative to normalized layout
     const firstP = finalLayout[0];
-    const lastP = finalLayout[finalLayout.length - 1]; // Use last piece for right zone logic
     
     // Left zone connects to the first piece (left end)
-    // We need to know orientation of first piece
     const leftZone = { 
       left: firstP.style.left - 70, 
       top: firstP.style.top 
     };
     
     // Right zone connects to the last piece (right end)
-    // Logic depends on direction of last piece
     const rightZone = { 
-      left: x + offsetX + (dir === 1 ? 10 : -70), 
-      top: y + offsetY 
+      left: currentX + offsetX + (dir === 1 ? 10 : -70), 
+      top: currentY + offsetY 
     };
 
     setLayoutPieces(finalLayout);
@@ -232,7 +225,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
     const widthScale = Math.min(1, availableWidth / totalWidth);
     
     // Limit zoom out to prevent pieces from disappearing
-    const minScale = 0.4;
+    const minScale = 0.35;
     setScale(Math.max(minScale, widthScale));
 
   }, [room?.board, boardWidth]);
@@ -1372,7 +1365,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                               className="absolute origin-center"
                               style={item.style}
                             >
-                              {renderPiece(item.piece, true, item.isVertical ? 'vertical' : 'horizontal')}
+                              {renderPiece(item.piece, true, item.renderOrientation)}
                             </motion.div>
                           );
                        })}
@@ -1482,14 +1475,33 @@ export function DominoGame({ onBack }: DominoGameProps) {
                         dragElastic={0.1}
                         dragMomentum={false}
                         onClick={() => {
-                        if (isMyTurn) {
-                           if (selectedPiece === piece) {
-                             setSelectedPiece(null); // Deselect
-                           } else {
-                             setSelectedPiece(piece); // Select
-                           }
-                        }
-                      }}
+                          if (!isMyTurn || isProcessing) return;
+
+                          const leftEnd = room.leftEnd;
+                          const rightEnd = room.rightEnd;
+                          
+                          const fitsLeft = piece.left === leftEnd || piece.right === leftEnd;
+                          const fitsRight = piece.left === rightEnd || piece.right === rightEnd;
+                          
+                          // If board is empty, any piece fits "left" (first play)
+                          if (!room.board || room.board.length === 0) {
+                            playPiece(piece, 'left');
+                            return;
+                          }
+
+                          if (fitsLeft && !fitsRight) {
+                            playPiece(piece, 'left');
+                          } else if (fitsRight && !fitsLeft) {
+                            playPiece(piece, 'right');
+                          } else if (fitsLeft && fitsRight) {
+                            // Fits both! Require selection and zone tap.
+                            if (selectedPiece === piece) {
+                              setSelectedPiece(null);
+                            } else {
+                              setSelectedPiece(piece);
+                            }
+                          }
+                        }}
                       onDragStart={() => {
                         setIsDragging(true);
                         setSelectedPiece(piece); // Auto-select on drag
