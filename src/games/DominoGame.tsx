@@ -109,10 +109,10 @@ export function DominoGame({ onBack }: DominoGameProps) {
     
     // 1. Generate Layout (0-based)
     const tempLayout: any[] = [];
-    const PW = 60;
-    const PH = 30;
+    const PW = 80;
+    const PH = 40;
     const G = 2; // Small gap
-    const maxRowWidth = 600;
+    const maxRowWidth = 800; // Increased to allow more pieces before turning
 
     let currentX = 0;
     let currentY = 0;
@@ -202,14 +202,14 @@ export function DominoGame({ onBack }: DominoGameProps) {
     
     // Left zone connects to the first piece (left end)
     const leftZone = { 
-      left: firstP.style.left - 70, 
-      top: firstP.style.top 
+      left: firstP.style.left - 90, 
+      top: firstP.style.top - 10 
     };
     
     // Right zone connects to the last piece (right end)
     const rightZone = { 
-      left: currentX + offsetX + (dir === 1 ? 10 : -70), 
-      top: currentY + offsetY 
+      left: currentX + offsetX + (dir === 1 ? 10 : -90), 
+      top: currentY + offsetY - 10
     };
 
     setLayoutPieces(finalLayout);
@@ -245,11 +245,11 @@ export function DominoGame({ onBack }: DominoGameProps) {
           }
         }}
         className={cn(
-          "h-24 border-2 border-dashed rounded-lg flex-shrink-0 transition-all duration-300 cursor-pointer flex items-center justify-center mx-0.5",
-          (isDragging || selectedPiece) ? "w-12 opacity-100 border-[#f0d0a0] bg-[#f0d0a0]/20 scale-110 animate-pulse" : "w-0 opacity-0 border-transparent overflow-hidden"
+          "border-4 border-dashed rounded-xl flex-shrink-0 transition-all duration-300 cursor-pointer flex items-center justify-center z-10",
+          (isDragging || selectedPiece) ? "w-[80px] h-[60px] opacity-100 border-[#f0d0a0] bg-[#f0d0a0]/30 scale-110 animate-pulse shadow-[0_0_20px_rgba(240,208,160,0.5)]" : "w-0 h-0 opacity-0 border-transparent overflow-hidden"
         )}
       >
-         {(isDragging || selectedPiece) && <div className="w-8 h-8 rounded-full bg-[#f0d0a0]/50 animate-ping" />}
+         {(isDragging || selectedPiece) && <div className="w-8 h-8 rounded-full bg-[#f0d0a0]/60 animate-ping" />}
       </div>
     );
   };
@@ -981,12 +981,17 @@ export function DominoGame({ onBack }: DominoGameProps) {
     const isHorizontal = orientation === 'horizontal';
     
     // Dimensions based on size and orientation
-    // Small (Board): Vertical 24x48 (w-6 h-12), Horizontal 48x24 (w-12 h-6)
-    // Large (Hand): Vertical 48x96 (w-12 h-24)
-    
     let sizeClass = "";
+    let inlineStyle = {};
+    
     if (isSmall) {
-      sizeClass = isHorizontal ? "w-12 h-6" : "w-6 h-12";
+      // Exact pixel sizes to match layout math
+      const PW = 80;
+      const PH = 40;
+      inlineStyle = {
+        width: isHorizontal ? PW : PH,
+        height: isHorizontal ? PH : PW
+      };
     } else {
       // Hand pieces: smaller on mobile, larger on desktop
       sizeClass = isHorizontal ? "w-16 h-8 md:w-24 md:h-12" : "w-8 h-16 md:w-12 md:h-24";
@@ -995,10 +1000,11 @@ export function DominoGame({ onBack }: DominoGameProps) {
     return (
       <div 
         className={cn(
-          "relative bg-[#fdfbf7] rounded-sm flex items-center justify-between select-none overflow-hidden shadow-[1px_1px_0px_0px_#bbb,2px_2px_0px_0px_#999,3px_3px_5px_0px_rgba(0,0,0,0.4)]",
+          "relative bg-[#fdfbf7] rounded-md flex items-center justify-between select-none overflow-hidden shadow-[1px_1px_0px_0px_#bbb,2px_2px_0px_0px_#999,3px_3px_5px_0px_rgba(0,0,0,0.5)]",
           isHorizontal ? "flex-row" : "flex-col",
           sizeClass
         )}
+        style={inlineStyle}
       >
         {/* Inner bevel highlight */}
         <div className="absolute inset-0 rounded-sm border-t border-l border-white/80 pointer-events-none"></div>
@@ -1334,8 +1340,8 @@ export function DominoGame({ onBack }: DominoGameProps) {
                       }
                     }}
                     className={cn(
-                      "w-64 h-32 border-4 border-dashed rounded-xl flex items-center justify-center transition-all cursor-pointer",
-                      (isDragging || selectedPiece) ? "border-[#f0d0a0] bg-[#f0d0a0]/20 scale-105 animate-pulse" : "border-white/10"
+                      "w-64 h-40 border-4 border-dashed rounded-2xl flex items-center justify-center transition-all cursor-pointer shadow-2xl",
+                      (isDragging || selectedPiece) ? "border-[#f0d0a0] bg-[#f0d0a0]/30 scale-110 animate-pulse shadow-[0_0_30px_rgba(240,208,160,0.4)]" : "border-white/20 bg-black/20"
                     )}
                   >
                     <div className="text-white/20 font-bold text-xl uppercase tracking-widest text-center pointer-events-none">
