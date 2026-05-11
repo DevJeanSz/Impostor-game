@@ -84,9 +84,9 @@ export function DominoGame({ onBack }: DominoGameProps) {
   }, []);
 
   // Constantes Globais de Design (Fonte Única de Verdade)
-  const PW = 80; // Largura da peça horizontal
-  const PH = 40; // Altura da peça horizontal (metade da largura)
-  const GAP = 2;
+  const PW = 80; 
+  const PH = 40; 
+  const GAP = 1;
 
 
   // Calculate Snake Layout
@@ -121,7 +121,6 @@ export function DominoGame({ onBack }: DominoGameProps) {
       const piece = pieces[i];
       const isDouble = piece.piece.left === piece.piece.right;
       
-      // No board: normal é sempre horizontal, double é sempre vertical
       const orientation = isDouble ? 'vertical' : 'horizontal';
       const visualWidth = isDouble ? PH : PW; 
 
@@ -134,25 +133,23 @@ export function DominoGame({ onBack }: DominoGameProps) {
         isDouble
       });
 
-      // Bounds para escala dinâmica
+      // Bounds para centralização
       minX = Math.min(minX, curX - PW/2);
       maxX = Math.max(maxX, curX + PW/2);
       minY = Math.min(minY, curY - PW/2);
       maxY = Math.max(maxY, curY + PW/2);
 
-      // Próxima peça
       const nextPiece = pieces[i+1];
       if (nextPiece) {
         const nextIsDouble = nextPiece.piece.left === nextPiece.piece.right;
         const nextVisualWidth = nextIsDouble ? PH : PW;
-        
-        // Distância exata: metade da largura de cada peça + gap
         const step = (visualWidth / 2) + (nextVisualWidth / 2) + GAP;
 
-        // Curva de retorno (Snake)
         if (Math.abs(curX + curDir * step) > maxRowWidth / 2) {
-          curY += PW + GAP; 
+          // Quando vira, alinha verticalmente e inverte a direção
+          curY += PW + GAP * 4; 
           curDir *= -1;
+          // O curX permanece o mesmo para começar a nova linha exatamente abaixo
         } else {
           curX += curDir * step;
         }
@@ -969,23 +966,23 @@ export function DominoGame({ onBack }: DominoGameProps) {
     const isHorizontal = orientation === 'horizontal';
     const width = isHorizontal ? PW : PH;
     const height = isHorizontal ? PH : PW;
-    const scale = isSmall ? 0.75 : 1;
 
     return (
       <div 
         className={cn(
-          "relative rounded-[4px] flex items-center justify-between select-none overflow-hidden shrink-0",
-          "bg-[#fdfcf8] border border-black/30 shadow-md",
+          "relative rounded-[3px] flex items-center justify-between select-none overflow-hidden shrink-0",
+          "bg-[#fdfcf8] border border-black/30",
           isHorizontal ? "flex-row" : "flex-col"
         )}
         style={{ 
-          width: width * scale, 
-          height: height * scale,
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1), inset 0 2px 4px rgba(255,255,255,0.8)'
+          width, 
+          height,
+          boxShadow: isSmall 
+            ? '0 4px 8px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,0.8)' 
+            : '0 15px 30px rgba(0,0,0,0.3), inset 0 2px 2px rgba(255,255,255,0.9)'
         }}
       >
-        {/* Ivory bevel effect */}
-        <div className="absolute inset-0 border border-white/40 pointer-events-none rounded-[3px]" />
+        <div className="absolute inset-0 border border-white/20 pointer-events-none rounded-[2px]" />
         
         <div className="flex-1 w-full h-full flex items-center justify-center relative">
           {renderDots(piece.left, isSmall)}
