@@ -5,9 +5,12 @@ import { cn, CATEGORIES } from '../lib/utils';
 
 interface SetupScreenProps {
   onStartGame: (players: string[], impostorCount: number, difficulty: 'easy' | 'medium' | 'hard') => void;
+  title?: string;
+  subtitle?: string;
+  hideImpostorCount?: boolean;
 }
 
-export function SetupScreen({ onStartGame }: SetupScreenProps) {
+export function SetupScreen({ onStartGame, title, subtitle, hideImpostorCount }: SetupScreenProps) {
   const [players, setPlayers] = useState<string[]>([]);
   const [newName, setNewName] = useState('');
   const [impostorCount, setImpostorCount] = useState(1);
@@ -80,9 +83,9 @@ export function SetupScreen({ onStartGame }: SetupScreenProps) {
       <div className="w-full flex flex-col items-center space-y-8 overflow-y-auto max-h-full py-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
         <div className="text-center space-y-2 shrink-0">
           <h1 className="text-4xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
-            Los Priemos
+            {title || 'Los Priemos'}
           </h1>
-          <p className="text-slate-400">Quem está mentindo?</p>
+          <p className="text-slate-400">{subtitle || 'Quem está mentindo?'}</p>
           <p className="text-xs text-slate-500 max-w-xs mx-auto pt-2">
             Adicione os jogadores e passem o dispositivo. A categoria será secreta!
           </p>
@@ -171,7 +174,7 @@ export function SetupScreen({ onStartGame }: SetupScreenProps) {
           </div>
         </div>
 
-        {players.length >= 4 && (
+        {players.length >= 4 && !hideImpostorCount && (
           <div className="w-full space-y-2 shrink-0">
             <label className="text-sm font-medium text-slate-300 uppercase tracking-wider">
               Quantidade de Impostores

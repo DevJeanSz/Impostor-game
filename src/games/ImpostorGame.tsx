@@ -5,9 +5,10 @@ import { TimerScreen } from '../components/TimerScreen';
 import { RevealScreen } from '../components/RevealScreen';
 import { CATEGORIES } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Globe, WifiOff, Database } from 'lucide-react';
+import { getWords, IMPOSTOR_WIKI_MAP, WordSource } from '../services/wikipediaService';
 
-type GameState = 'setup' | 'passing' | 'timer' | 'reveal';
+type GameState = 'setup' | 'loading' | 'passing' | 'timer' | 'reveal';
 
 interface ImpostorGameProps {
   onBack: () => void;
@@ -22,97 +23,78 @@ export function ImpostorGame({ onBack }: ImpostorGameProps) {
   const [pastImpostors, setPastImpostors] = useState<string[]>([]);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [secretWord, setSecretWord] = useState<string>('');
+  const [wordSource, setWordSource] = useState<WordSource>('offline');
+  const [categoryName, setCategoryName] = useState<string>('');
 
-  const startGame = (playerNames: string[], impostorCount: number, difficulty: 'easy' | 'medium' | 'hard' = 'medium') => {
+  const startGame = async (playerNames: string[], impostorCount: number, difficulty: 'easy' | 'medium' | 'hard' = 'medium') => {
+    setGameState('loading');
     try {
-      console.log("Starting game with:", { playerNames, impostorCount, difficulty });
-
-      if (!CATEGORIES || CATEGORIES.length === 0) {
-        console.error("No categories found");
-        alert("Erro: Nenhuma categoria encontrada.");
-        return;
-      }
-
-      // Select random category
+      // Selecionar categoria aleatória
       const randomCategory = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
-      console.log("Selected category:", randomCategory.name);
-      
-      // Filter words based on difficulty
-      let difficultyWords = randomCategory.words;
-      
+      setCategoryName(randomCategory.name);
+
+      // Tentar buscar palavras do Wikipedia (com fallback offline automático)
+      const wikiConfig = IMPOSTOR_WIKI_MAP[randomCategory.id];
+      let allWords: string[] = randomCategory.words;
+
+      if (wikiConfig) {
+        const result = await getWords(wikiConfig, `impostor_${randomCategory.id}`, randomCategory.words);
+        allWords = result.words;
+        setWordSource(result.source);
+      } else {
+        setWordSource('offline');
+      }
+
+      // Filtrar por dificuldade (baseado no tamanho da palavra — mantém compatibilidade)
+      let difficultyWords = allWords;
       if (difficulty === 'easy') {
-        difficultyWords = randomCategory.words.filter(w => w.length <= 6);
+        difficultyWords = allWords.filter(w => w.length <= 6);
       } else if (difficulty === 'medium') {
-        difficultyWords = randomCategory.words.filter(w => w.length >= 7 && w.length <= 9);
+        difficultyWords = allWords.filter(w => w.length >= 7 && w.length <= 12);
       } else if (difficulty === 'hard') {
-        difficultyWords = randomCategory.words.filter(w => w.length >= 10);
+        difficultyWords = allWords.filter(w => w.length >= 13);
       }
 
-      // Fallback if no words match difficulty (e.g. category has only short words)
-      if (difficultyWords.length === 0) {
-        console.warn(`No words found for difficulty ${difficulty} in category ${randomCategory.name}. Using all words.`);
-        difficultyWords = randomCategory.words;
-      }
+      // Fallback: se o filtro de dificuldade ficou vazio, usa todas
+      if (difficultyWords.length === 0) difficultyWords = allWords;
 
-      // Filter out used words for this category if possible
+      // Filtrar palavras já usadas
       const availableWords = difficultyWords.filter(w => !usedWords.includes(w));
-      
-      // If all words used, reset pool for this category (or just pick random if really stuck)
       const wordPool = availableWords.length > 0 ? availableWords : difficultyWords;
       const word = wordPool[Math.floor(Math.random() * wordPool.length)];
-      console.log("Selected word:", word);
-      
-      // Add to used words
+
       setUsedWords(prev => [...prev, word]);
-      
-      // Impostor rotation logic - now supporting multiple impostors
-      // Ensure pastImpostors is defined
+
+      // Rotação de impostores
       const currentPastImpostors = pastImpostors || [];
       let candidates = playerNames.filter(p => !currentPastImpostors.includes(p));
       let resetHistory = false;
-      
-      console.log("Candidates:", candidates);
 
-      // If not enough candidates for the requested impostor count, reset the pool
       if (candidates.length < impostorCount) {
-        console.log("Not enough candidates, resetting history");
-        candidates = [...playerNames]; // Create a copy to be safe
+        candidates = [...playerNames];
         resetHistory = true;
       }
-      
-      // Select N unique impostors
+
       const newImpostorIndices: number[] = [];
       const newImpostorNames: string[] = [];
-      
-      // Create a copy of candidates to pick from
       const availableCandidates = [...candidates];
-      
+
       for (let i = 0; i < impostorCount; i++) {
         if (availableCandidates.length === 0) break;
-        
         const randomIndex = Math.floor(Math.random() * availableCandidates.length);
         const impostorName = availableCandidates[randomIndex];
-        
-        // Remove selected candidate so they aren't picked again
         availableCandidates.splice(randomIndex, 1);
-        
         newImpostorNames.push(impostorName);
         const idx = playerNames.indexOf(impostorName);
-        if (idx !== -1) {
-          newImpostorIndices.push(idx);
-        }
+        if (idx !== -1) newImpostorIndices.push(idx);
       }
-      
-      console.log("New impostors:", newImpostorNames);
 
-      // Update past impostors
       if (resetHistory) {
         setPastImpostors(newImpostorNames);
       } else {
         setPastImpostors(prev => [...(prev || []), ...newImpostorNames]);
       }
 
-      // Pick random starting player
       const starter = playerNames[Math.floor(Math.random() * playerNames.length)];
 
       setPlayers(playerNames);
@@ -121,10 +103,10 @@ export function ImpostorGame({ onBack }: ImpostorGameProps) {
       setStartingPlayer(starter);
       setCurrentPlayerIndex(0);
       setGameState('passing');
-      console.log("Game state set to passing");
     } catch (error) {
-      console.error("Error starting game:", error);
-      alert("Ocorreu um erro ao iniciar o jogo. Tente novamente.");
+      console.error('Erro ao iniciar jogo:', error);
+      setGameState('setup');
+      alert('Ocorreu um erro ao iniciar o jogo. Tente novamente.');
     }
   };
 
@@ -143,10 +125,27 @@ export function ImpostorGame({ onBack }: ImpostorGameProps) {
     setCurrentPlayerIndex(0);
   };
 
+  // Badge de fonte de dados
+  const SourceBadge = () => {
+    const config = {
+      wikipedia: { icon: Globe, label: 'Wikipedia', color: 'text-blue-400 bg-blue-400/10 border-blue-400/20' },
+      cache:     { icon: Database, label: 'Cache', color: 'text-violet-400 bg-violet-400/10 border-violet-400/20' },
+      offline:   { icon: WifiOff, label: 'Offline', color: 'text-slate-400 bg-slate-400/10 border-slate-400/20' },
+    }[wordSource];
+
+    const Icon = config.icon;
+    return (
+      <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wider ${config.color}`}>
+        <Icon size={10} />
+        {config.label}
+      </div>
+    );
+  };
+
   return (
     <div className="h-full relative">
       {gameState === 'setup' && (
-        <button 
+        <button
           onClick={onBack}
           className="absolute top-4 left-4 z-10 p-2 text-slate-400 hover:text-white transition-colors"
         >
@@ -167,6 +166,29 @@ export function ImpostorGame({ onBack }: ImpostorGameProps) {
           </motion.div>
         )}
 
+        {/* Tela de carregamento — busca no Wikipedia */}
+        {gameState === 'loading' && (
+          <motion.div
+            key="loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="h-full flex flex-col items-center justify-center gap-6 p-8 text-center"
+          >
+            <div className="relative">
+              <div className="w-20 h-20 rounded-full border-4 border-indigo-500/20 border-t-indigo-500 animate-spin" />
+              <Globe className="absolute inset-0 m-auto text-indigo-400" size={28} />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-white mb-1">Buscando palavras</h3>
+              <p className="text-slate-500 text-sm">Consultando a Wikipedia em português...</p>
+            </div>
+            <p className="text-xs text-slate-600 bg-slate-800/50 px-4 py-2 rounded-xl border border-slate-700">
+              Se não houver internet, usaremos a lista offline 📦
+            </p>
+          </motion.div>
+        )}
+
         {gameState === 'passing' && (
           <motion.div
             key={`passing-${currentPlayerIndex}`}
@@ -175,6 +197,10 @@ export function ImpostorGame({ onBack }: ImpostorGameProps) {
             exit={{ opacity: 0, x: -20 }}
             className="h-full"
           >
+            {/* Badge de fonte no canto */}
+            <div className="absolute top-4 right-4 z-20">
+              <SourceBadge />
+            </div>
             <PassDeviceScreen
               currentPlayer={players[currentPlayerIndex]}
               isImpostor={impostorIndices.includes(currentPlayerIndex)}
@@ -194,8 +220,8 @@ export function ImpostorGame({ onBack }: ImpostorGameProps) {
             exit={{ opacity: 0, scale: 1.05 }}
             className="h-full"
           >
-            <TimerScreen 
-              onFinish={() => setGameState('reveal')} 
+            <TimerScreen
+              onFinish={() => setGameState('reveal')}
               startingPlayer={startingPlayer}
             />
           </motion.div>

@@ -1029,9 +1029,9 @@ export function DominoGame({ onBack }: DominoGameProps) {
     );
   };
 
-  const isMyTurn = room?.players[room.currentTurnIndex]?.id === playerId;
+  const isMyTurn = room?.players?.[room.currentTurnIndex]?.id === playerId;
   const hasValidMove = canPlay();
-  const canBuy = room?.config.piecesPerPlayer === 3 && room?.drawPile && room.drawPile.length > 0;
+  const canBuy = room?.config?.piecesPerPlayer === 3 && (room?.drawPile?.length ?? 0) > 0;
 
   return (
     <div className="h-full flex flex-col relative bg-[#1a472a] text-slate-50 overflow-hidden font-sans">
@@ -1201,7 +1201,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                 <div className="space-y-4">
                   <div className="flex items-center justify-center gap-2 text-green-300 mb-4">
                     <Users size={20} />
-                    <span className="font-bold">{room.players.length} Jogadores</span>
+                    <span className="font-bold">{room.players?.length ?? 0} Jogadores</span>
                   </div>
                   
                   <div className="space-y-2">
@@ -1211,7 +1211,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                         {player.id === playerId && <span className="text-xs bg-[#f0d0a0] text-black font-bold px-2 py-1 rounded">Você</span>}
                       </div>
                     ))}
-                    {Array.from({ length: 4 - room.players.length }).map((_, i) => (
+                    {Array.from({ length: Math.max(0, 4 - (room.players?.length ?? 0)) }).map((_, i) => (
                       <div key={`empty-${i}`} className="border-2 border-dashed border-white/10 p-3 rounded-xl text-white/30 font-bold">
                         Aguardando...
                       </div>
@@ -1219,7 +1219,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   </div>
                 </div>
 
-                {room.players[0].id === playerId && (
+                {room.players?.[0]?.id === playerId && (
                   <button
                     onClick={startGame}
                     disabled={room.players.length < 2}
@@ -1230,7 +1230,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   </button>
                 )}
                 
-                {room.players[0].id !== playerId && (
+                {room.players?.[0]?.id !== playerId && (
                   <p className="mt-8 text-[#f0d0a0] animate-pulse font-bold">Aguardando líder iniciar...</p>
                 )}
               </div>
@@ -1242,10 +1242,10 @@ export function DominoGame({ onBack }: DominoGameProps) {
               {/* Game Info */}
               <div className="flex justify-between items-center px-4 py-2 bg-black/30 backdrop-blur-sm border-b border-white/5">
                 <div className="text-sm text-green-300">
-                  Turno de: <span className="font-bold text-[#f0d0a0] text-lg ml-1">{room.players[room.currentTurnIndex].name}</span>
+                  Turno de: <span className="font-bold text-[#f0d0a0] text-lg ml-1">{room.players?.[room.currentTurnIndex]?.name ?? '...'}</span>
                 </div>
                 <div className="text-xs text-white/50">
-                  Monte: {room.drawPile?.length || 0}
+                  Monte: {room.drawPile?.length ?? 0}
                 </div>
               </div>
 
@@ -1289,7 +1289,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                           {room.lastAction?.includes("travado") ? "O jogo travou e venceu quem tinha menos pontos." : "Bateu e limpou a mão!"}
                         </div>
 
-                        {room.players[0].id === playerId ? (
+                        {room.players?.[0]?.id === playerId ? (
                           <button
                             onClick={startGame}
                             className="w-full bg-[#f0d0a0] hover:bg-[#e0c090] text-black font-bold py-3 rounded-xl shadow-[0px_4px_0px_0px_#b09060] active:shadow-none active:translate-y-[4px] transition-all flex items-center justify-center gap-2"
@@ -1397,16 +1397,16 @@ export function DominoGame({ onBack }: DominoGameProps) {
 
                   {/* Center: Opponents */}
                   <div className="flex gap-3 pointer-events-auto">
-                    {room.players.filter(p => p.id !== playerId).map(p => (
+                    {(room.players ?? []).filter(p => p.id !== playerId).map(p => (
                       <div key={p.id} className={cn(
                         "flex flex-col items-center p-2.5 rounded-2xl transition-all duration-500 backdrop-blur-lg border shadow-lg",
-                        room.players[room.currentTurnIndex].id === p.id 
+                        room.players?.[room.currentTurnIndex]?.id === p.id 
                           ? "bg-[#f0d0a0]/30 scale-110 border-[#f0d0a0]/50 shadow-[0_0_20px_rgba(240,208,160,0.4)]" 
                           : "bg-black/40 border-white/5 opacity-80"
                       )}>
                         <div className="w-11 h-11 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center border border-white/20 mb-1.5 shadow-inner relative">
                            <span className="text-xs font-black text-white">{p.name.substring(0, 2).toUpperCase()}</span>
-                           {room.players[room.currentTurnIndex].id === p.id && (
+                           {room.players?.[room.currentTurnIndex]?.id === p.id && (
                              <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-400 rounded-full border-2 border-slate-900 animate-pulse shadow-sm" />
                            )}
                         </div>
@@ -1469,11 +1469,11 @@ export function DominoGame({ onBack }: DominoGameProps) {
                 </div>
 
                 <div className="flex overflow-x-auto no-scrollbar gap-3 pb-6 px-4 min-h-[160px] items-center justify-start md:justify-center">
-                  {room.players.find(p => p.id === playerId)?.hand?.map((piece, i) => {
+                  {(room.players ?? []).find(p => p.id === playerId)?.hand?.map((piece, i) => {
                     const id = `piece-${i}-${piece.left}-${piece.right}`;
                     const fitsLeft = piece.left === room.leftEnd || piece.right === room.leftEnd;
                     const fitsRight = piece.left === room.rightEnd || piece.right === room.rightEnd;
-                    const canPlayThis = isMyTurn && (room.board.length === 0 || fitsLeft || fitsRight);
+                    const canPlayThis = isMyTurn && ((room.board?.length ?? 0) === 0 || fitsLeft || fitsRight);
 
                     return (
                       <motion.div
@@ -1492,7 +1492,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                           const fitsLeft = piece.left === leftEnd || piece.right === leftEnd;
                           const fitsRight = piece.left === rightEnd || piece.right === rightEnd;
                           
-                          // If board is empty, any piece fits "left" (first play)
+                          // Se o board está vazio, qualquer peça cabe (primeira jogada)
                           if (!room.board || room.board.length === 0) {
                             playPiece(piece, 'left');
                             return;
