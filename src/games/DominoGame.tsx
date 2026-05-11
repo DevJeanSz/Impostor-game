@@ -38,6 +38,7 @@ interface GameRoom {
   winner?: Player;
   lastAction?: string;
   turnDeadline?: number;
+  consecutivePasses?: number;
 }
 
 export function DominoGame({ onBack }: DominoGameProps) {
@@ -64,6 +65,8 @@ export function DominoGame({ onBack }: DominoGameProps) {
   const [boardWidth, setBoardWidth] = useState(window.innerWidth);
   const [scale, setScale] = useState(1);
   const [boardSize, setBoardSize] = useState({ width: 0, height: 0 });
+  const [layoutPieces, setLayoutPieces] = useState<any[]>([]);
+  const [zonePositions, setZonePositions] = useState<{left: any, right: any}>({ left: {}, right: {} });
   
   const leftZoneRef = useRef<HTMLDivElement>(null);
   const rightZoneRef = useRef<HTMLDivElement>(null);
@@ -81,152 +84,136 @@ export function DominoGame({ onBack }: DominoGameProps) {
   }, []);
 
   // Layout Constants
-  const PIECE_WIDTH = 60;  // Reduced size for better fit
-  const PIECE_HEIGHT = 30;
-  const GAP = 4;
+  const PIECE_WIDTH = 80;
+  const PIECE_HEIGHT = 40;
+  const GAP = 1;
 
-  const [layoutPieces, setLayoutPieces] = useState<any[]>([]);
-  const [boardHeight, setBoardHeight] = useState(400);
-  const [zonePositions, setZonePositions] = useState<{left: any, right: any}>({ left: {}, right: {} });
 
   // Calculate Snake Layout
   useEffect(() => {
     if (!room) return;
     
     const pieces = room.board || [];
-    
-    // If empty board
     if (pieces.length === 0) {
        setZonePositions({ 
-         left: { left: '50%', top: '50%', transform: 'translate(-150%, -50%)' }, 
-         right: { left: '50%', top: '50%', transform: 'translate(50%, -50%)' } 
+         left: { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }, 
+         right: { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' } 
        });
        setLayoutPieces([]);
-       setBoardSize({ width: 300, height: 200 }); // Default size
+       setBoardSize({ width: 400, height: 400 });
        setScale(1);
        return;
     }
     
-    // 1. Generate Layout (0-based)
     const tempLayout: any[] = [];
-    const PW = 80;
-    const PH = 40;
-    const G = 2; // Small gap
-    const maxRowWidth = 800; // Increased to allow more pieces before turning
-
-    let currentX = 0;
-    let currentY = 0;
-    let dir = 1; // 1 = right, -1 = left
+    const PW = PIECE_WIDTH;
+    const PH = PIECE_HEIGHT;
+    const G = GAP;
     
-    // Track bounds
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
+    // Limits based on screen
+    const maxRowWidth = Math.min(boardWidth * 0.85, 500); 
+
+    let curX = 0;
+    let curY = 0;
+    let curDir = 1; // 1 = right, -1 = left
+    
+    let minX = 0, maxX = 0, minY = 0, maxY = 0;
 
     for (let i = 0; i < pieces.length; i++) {
       const piece = pieces[i];
       const isDouble = piece.piece.left === piece.piece.right;
       
-      let w = isDouble ? PH : PW; 
-      let h = isDouble ? PW : PH; 
-      
       // Check if we need to turn
-      let isTurn = false;
-      if (dir === 1 && currentX + w > maxRowWidth) isTurn = true;
-      if (dir === -1 && currentX - w < -maxRowWidth) isTurn = true;
+      // Predicted position if we continue this way
+      const step = isDouble ? PH : PW;
+      const predictedX = curX + (curDir * step);
+      
+      let isTurnPiece = false;
+      if (i > 0 && ((curDir === 1 && predictedX > maxRowWidth/2) || (curDir === -1 && predictedX < -maxRowWidth/2))) {
+        isTurnPiece = true;
+      }
 
-      if (isTurn) {
-        // Render this piece vertically as a corner
-        const cornerW = PH; 
-        const cornerH = PW; 
-        
-        let placeX = dir === 1 ? currentX - cornerW : currentX;
-        let placeY = currentY + PH + G;
-        
-        tempLayout.push({
-          ...piece,
-          style: { left: placeX, top: placeY, zIndex: i },
-          renderOrientation: 'vertical'
-        });
-        
-        // Update bounds
-        minX = Math.min(minX, placeX);
-        maxX = Math.max(maxX, placeX + cornerW);
-        minY = Math.min(minY, placeY);
-        maxY = Math.max(maxY, placeY + cornerH);
-
-        // Update for next row
-        currentY = placeY + cornerH + G;
-        dir *= -1;
-        currentX = dir === 1 ? placeX + cornerW + G : placeX - G;
+      let rotation = 0;
+      if (isTurnPiece) {
+        rotation = 90;
+        // Don't change curX, move curY down
       } else {
-        let placeX = dir === 1 ? currentX : currentX - w;
-        let placeY = isDouble ? currentY - (PW - PH)/2 : currentY; // Center double vertically
-        
-        tempLayout.push({
-          ...piece,
-          style: { left: placeX, top: placeY, zIndex: i },
-          renderOrientation: isDouble ? 'vertical' : 'horizontal'
-        });
-        
-        // Update bounds
-        minX = Math.min(minX, placeX);
-        maxX = Math.max(maxX, placeX + w);
-        minY = Math.min(minY, placeY);
-        maxY = Math.max(maxY, placeY + h);
+        rotation = isDouble ? 90 : (curDir === 1 ? 0 : 180);
+      }
 
-        currentX = dir === 1 ? currentX + w + G : currentX - w - G;
+      tempLayout.push({
+        ...piece,
+        x: curX,
+        y: curY,
+        rotation,
+        isDouble,
+        isTurnPiece
+      });
+
+      // Update bounds for normalization
+      minX = Math.min(minX, curX - PW);
+      maxX = Math.max(maxX, curX + PW);
+      minY = Math.min(minY, curY - PW);
+      maxY = Math.max(maxY, curY + PW);
+
+      // Prepare for next piece
+      if (isTurnPiece) {
+        curY += PW + G;
+        curDir *= -1;
+      } else {
+        curX += curDir * (isDouble ? PH + G : PW + G);
       }
     }
     
-    // 2. Normalize Coordinates (Shift to 0,0)
-    const padding = 80; // Internal padding
-    const layoutWidth = maxX - minX;
-    const layoutHeight = maxY - minY;
+    const padding = 100;
+    const lWidth = maxX - minX + padding * 2;
+    const lHeight = maxY - minY + padding * 2;
     
-    const offsetX = -minX + padding;
-    const offsetY = -minY + padding;
-
     const finalLayout = tempLayout.map(item => ({
       ...item,
       style: {
-        ...item.style,
-        left: item.style.left + offsetX,
-        top: item.style.top + offsetY
+        left: item.x - minX + padding,
+        top: item.y - minY + padding,
+        transform: `translate(-50%, -50%) rotate(${item.rotation}deg)`,
+        zIndex: 10
       }
     }));
-    
-    // 3. Calculate Zones relative to normalized layout
-    const firstP = finalLayout[0];
-    
-    // Left zone connects to the first piece (left end)
-    const leftZone = { 
-      left: firstP.style.left - 90, 
-      top: firstP.style.top - 10 
+
+    // Zones
+    const first = finalLayout[0];
+    const last = finalLayout[finalLayout.length - 1];
+
+    // Left zone (start of chain)
+    const leftZ = {
+      left: first.style.left - (first.isDouble ? PH : PW) - 10,
+      top: first.style.top,
+      transform: 'translate(-50%, -50%)'
     };
+
+    // Right zone (end of chain)
+    const lastMeta = tempLayout[tempLayout.length - 1];
+    let rXOffset = 0, rYOffset = 0;
     
-    // Right zone connects to the last piece (right end)
-    const rightZone = { 
-      left: currentX + offsetX + (dir === 1 ? 10 : -90), 
-      top: currentY + offsetY - 10
+    if (lastMeta.isTurnPiece) {
+      rYOffset = PW + 20;
+    } else {
+      const dir = lastMeta.rotation === 180 ? -1 : 1;
+      rXOffset = (lastMeta.isDouble ? PH : PW) * dir + 15 * dir;
+    }
+
+    const rightZ = {
+      left: last.style.left + rXOffset,
+      top: last.style.top + rYOffset,
+      transform: 'translate(-50%, -50%)'
     };
 
     setLayoutPieces(finalLayout);
-    setZonePositions({ left: leftZone, right: rightZone });
-    
-    const totalWidth = layoutWidth + (padding * 2);
-    const totalHeight = layoutHeight + (padding * 2);
-    setBoardSize({ width: totalWidth, height: totalHeight });
+    setZonePositions({ left: leftZ, right: rightZ });
+    setBoardSize({ width: lWidth, height: lHeight });
 
-    // 4. Calculate Scale
-    // Fit totalWidth into boardWidth (with some margin)
-    const availableWidth = boardWidth - 40;
-    const widthScale = Math.min(1, availableWidth / totalWidth);
-    
-    // Limit zoom out to prevent pieces from disappearing
-    const minScale = 0.35;
-    setScale(Math.max(minScale, widthScale));
+    const availW = boardWidth - 40;
+    const availH = window.innerHeight * 0.6;
+    setScale(Math.min(1, availW / lWidth, availH / lHeight, 0.85));
 
   }, [room?.board, boardWidth]);
 
@@ -245,11 +232,18 @@ export function DominoGame({ onBack }: DominoGameProps) {
           }
         }}
         className={cn(
-          "border-4 border-dashed rounded-xl flex-shrink-0 transition-all duration-300 cursor-pointer flex items-center justify-center z-10",
-          (isDragging || selectedPiece) ? "w-[80px] h-[60px] opacity-100 border-[#f0d0a0] bg-[#f0d0a0]/30 scale-110 animate-pulse shadow-[0_0_20px_rgba(240,208,160,0.5)]" : "w-0 h-0 opacity-0 border-transparent overflow-hidden"
+          "border-2 border-dashed rounded-xl flex-shrink-0 transition-all duration-300 cursor-pointer flex items-center justify-center z-20",
+          (isDragging || selectedPiece) 
+            ? "w-[90px] h-[50px] opacity-100 border-[#f0d0a0] bg-[#f0d0a0]/20 scale-110 animate-pulse shadow-[0_0_25px_rgba(240,208,160,0.6)]" 
+            : "w-0 h-0 opacity-0 border-transparent overflow-hidden"
         )}
       >
-         {(isDragging || selectedPiece) && <div className="w-8 h-8 rounded-full bg-[#f0d0a0]/60 animate-ping" />}
+         {(isDragging || selectedPiece) && (
+           <div className="flex flex-col items-center gap-1">
+             <div className="w-2 h-2 rounded-full bg-[#f0d0a0] animate-ping" />
+             <span className="text-[8px] font-bold text-[#f0d0a0] uppercase tracking-tighter">Conectar</span>
+           </div>
+         )}
       </div>
     );
   };
@@ -943,7 +937,6 @@ export function DominoGame({ onBack }: DominoGameProps) {
   // 3 4 5
   // 6 7 8
   const renderDots = (value: number, isSmall = false) => {
-    // Standard domino dot positions (3x3 grid)
     const positions: Record<number, number[]> = {
       0: [],
       1: [4],
@@ -951,24 +944,22 @@ export function DominoGame({ onBack }: DominoGameProps) {
       3: [2, 4, 6],
       4: [0, 2, 6, 8],
       5: [0, 2, 4, 6, 8],
-      6: [0, 1, 2, 6, 7, 8]
+      6: [0, 2, 3, 5, 6, 8]
     };
-
-    // Adjust 6 for vertical/horizontal if needed, but standard 2x3 fits well in 3x3 grid
-    if (value === 6) {
-        positions[6] = [0, 2, 3, 5, 6, 8];
-    }
 
     const dotIndices = positions[value] || [];
 
     return (
-      <div className="grid grid-cols-3 grid-rows-3 w-full h-full p-[10%] gap-[1px]">
+      <div className="grid grid-cols-3 grid-rows-3 w-full h-full p-[15%] gap-[1px]">
         {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => (
           <div key={i} className="flex items-center justify-center">
             {dotIndices.includes(i) && (
-              <div className={cn(
-                "rounded-full bg-black shadow-[inset_0_1px_1px_rgba(255,255,255,0.5),0_1px_0px_rgba(255,255,255,0.3)]",
-                isSmall ? "w-1.5 h-1.5" : "w-2 h-2 md:w-3 md:h-3" // Larger dots
+              <motion.div 
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className={cn(
+                "rounded-full bg-slate-900 shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),0_1px_1px_rgba(0,0,0,0.3)]",
+                isSmall ? "w-1.5 h-1.5" : "w-3 h-3 md:w-4 md:h-4"
               )} />
             )}
           </div>
@@ -977,49 +968,48 @@ export function DominoGame({ onBack }: DominoGameProps) {
     );
   };
 
-  const renderPiece = (piece: DominoPiece, isSmall = false, orientation: 'vertical' | 'horizontal' = 'vertical', scale = 1) => {
+  const renderPiece = (piece: DominoPiece, isSmall = false, orientation: 'vertical' | 'horizontal' = 'vertical') => {
     const isHorizontal = orientation === 'horizontal';
     
-    // Dimensions based on size and orientation
     let sizeClass = "";
     let inlineStyle = {};
     
     if (isSmall) {
-      // Exact pixel sizes to match layout math
-      const PW = 80;
-      const PH = 40;
       inlineStyle = {
-        width: isHorizontal ? PW : PH,
-        height: isHorizontal ? PH : PW
+        width: PIECE_WIDTH / 2,
+        height: PIECE_HEIGHT
       };
     } else {
-      // Hand pieces: smaller on mobile, larger on desktop
-      sizeClass = isHorizontal ? "w-16 h-8 md:w-24 md:h-12" : "w-8 h-16 md:w-12 md:h-24";
+      sizeClass = isHorizontal ? "w-24 h-12 md:w-32 md:h-16" : "w-12 h-24 md:w-16 md:h-32";
     }
 
     return (
       <div 
         className={cn(
-          "relative bg-[#fdfbf7] rounded-md flex items-center justify-between select-none overflow-hidden shadow-[1px_1px_0px_0px_#bbb,2px_2px_0px_0px_#999,3px_3px_5px_0px_rgba(0,0,0,0.5)]",
+          "relative bg-[#fdfbf7] rounded-lg flex items-center justify-between select-none overflow-hidden transition-transform duration-300",
+          "shadow-[2px_2px_0px_0px_#d1d5db,4px_4px_8px_0px_rgba(0,0,0,0.3)] hover:shadow-[3px_3px_0px_0px_#d1d5db,6px_6px_12px_0px_rgba(0,0,0,0.4)]",
           isHorizontal ? "flex-row" : "flex-col",
           sizeClass
         )}
         style={inlineStyle}
       >
-        {/* Inner bevel highlight */}
-        <div className="absolute inset-0 rounded-sm border-t border-l border-white/80 pointer-events-none"></div>
-        <div className="absolute inset-0 rounded-sm border-b border-r border-black/10 pointer-events-none"></div>
-
+        <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-black/5 pointer-events-none" />
+        
         <div className="flex-1 w-full h-full flex items-center justify-center relative">
           {renderDots(piece.left, isSmall)}
         </div>
         
-        {/* Engraved divider line */}
-        <div className={cn("bg-[#d4d4d4] shadow-[inset_1px_1px_1px_rgba(0,0,0,0.2)]", isHorizontal ? "w-[2px] h-[80%]" : "w-[80%] h-[2px]")}></div>
+        <div className={cn(
+          "bg-slate-300 shadow-[inset_1px_1px_1px_rgba(0,0,0,0.1)]", 
+          isHorizontal ? "w-[2px] h-[70%]" : "w-[70%] h-[2px]"
+        )} />
         
         <div className="flex-1 w-full h-full flex items-center justify-center relative">
           {renderDots(piece.right, isSmall)}
         </div>
+
+        {/* Pin in the middle for double-sided look */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-1 bg-slate-400 rounded-full shadow-inner opacity-40" />
       </div>
     );
   };
@@ -1329,10 +1319,17 @@ export function DominoGame({ onBack }: DominoGameProps) {
               </AnimatePresence>
 
               {/* Game Board Area */}
-              <div ref={boardRef} className="flex-1 rounded-xl m-2 flex items-center justify-center relative overflow-hidden p-4 shadow-inner bg-[#11301c]">
+              <div ref={boardRef} className="flex-1 m-2 flex items-center justify-center relative overflow-hidden rounded-3xl shadow-[inset_0_4px_20px_rgba(0,0,0,0.4)] bg-[#1a472a] border border-white/5 group">
+                {/* Felt texture overlay */}
+                <div className="absolute inset-0 opacity-40 pointer-events-none mix-blend-overlay"
+                     style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/felt.png")' }}></div>
+                
+                {/* Ambient light effect */}
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,rgba(255,255,255,0.1),transparent)] pointer-events-none"></div>
+
                 {(!room.board || room.board.length === 0) ? (
                   <div 
-                    ref={leftZoneRef} // Use left zone as the single drop zone for empty board
+                    ref={leftZoneRef}
                     onClick={() => {
                       if (selectedPiece) {
                         playPiece(selectedPiece, 'left');
@@ -1340,19 +1337,22 @@ export function DominoGame({ onBack }: DominoGameProps) {
                       }
                     }}
                     className={cn(
-                      "w-64 h-40 border-4 border-dashed rounded-2xl flex items-center justify-center transition-all cursor-pointer shadow-2xl",
-                      (isDragging || selectedPiece) ? "border-[#f0d0a0] bg-[#f0d0a0]/30 scale-110 animate-pulse shadow-[0_0_30px_rgba(240,208,160,0.4)]" : "border-white/20 bg-black/20"
+                      "w-56 h-36 border-2 border-dashed rounded-3xl flex flex-col items-center justify-center transition-all cursor-pointer z-10",
+                      (isDragging || selectedPiece) ? "border-[#f0d0a0] bg-[#f0d0a0]/10 scale-110 shadow-[0_0_50px_rgba(240,208,160,0.3)]" : "border-white/10 bg-black/20 backdrop-blur-sm"
                     )}
                   >
-                    <div className="text-white/20 font-bold text-xl uppercase tracking-widest text-center pointer-events-none">
-                      {(isDragging || selectedPiece) ? "Toque aqui para jogar" : (isMyTurn ? "Sua vez!" : "Aguardando...")}
+                    <div className="w-14 h-14 rounded-full border-2 border-[#f0d0a0]/40 flex items-center justify-center mb-3 animate-pulse bg-black/20">
+                      <PlusCircle className="text-[#f0d0a0]" size={28} />
+                    </div>
+                    <div className="text-[#f0d0a0] font-bold text-sm uppercase tracking-widest text-center px-6 drop-shadow-lg">
+                      {(isDragging || selectedPiece) ? "Solte para Iniciar" : (isMyTurn ? "Comece o Jogo" : "Aguardando...")}
                     </div>
                   </div>
                 ) : (
                   <div className="w-full h-full overflow-hidden flex items-center justify-center">
                     {/* Scaled Board Container */}
                     <div 
-                      className="relative transition-all duration-500 ease-out origin-center bg-[#11301c] rounded-xl shadow-2xl" 
+                      className="relative transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] origin-center" 
                       style={{ 
                         width: boardSize.width, 
                         height: boardSize.height,
@@ -1361,17 +1361,17 @@ export function DominoGame({ onBack }: DominoGameProps) {
                     >
                        {layoutPieces.map((item, index) => {
                           const p = item.piece;
-                          const id = `piece-${Math.min(p.left, p.right)}-${Math.max(p.left, p.right)}`;
+                          const id = `board-piece-${index}-${p.left}-${p.right}`;
                           return (
                             <motion.div
-                              key={index}
+                              key={id}
                               layoutId={id}
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
+                              initial={{ scale: 0, opacity: 0, rotate: item.rotation - 20 }}
+                              animate={{ scale: 1, opacity: 1, rotate: item.rotation }}
                               className="absolute origin-center"
                               style={item.style}
                             >
-                              {renderPiece(item.piece, true, item.renderOrientation)}
+                              {renderPiece(item.piece, true, 'vertical')}
                             </motion.div>
                           );
                        })}
@@ -1387,47 +1387,46 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   </div>
                 )}
                 
-                {/* Opponents Hands & Status */}
-                <div className="absolute top-4 left-0 right-0 px-4 flex justify-between items-start pointer-events-none z-20">
+                {/* Opponents Hands & Status - Glassmorphism UI */}
+                <div className="absolute top-4 left-0 right-0 px-4 flex justify-between items-start pointer-events-none z-30">
                   {/* Left: Room Info */}
-                  <div className="bg-black/40 p-2 rounded-lg backdrop-blur-sm pointer-events-auto border border-white/10">
-                    <div className="text-[10px] text-white/60 uppercase tracking-wider">Sala</div>
-                    <div className="font-mono font-bold text-[#f0d0a0] text-sm">{room.id}</div>
+                  <div className="bg-black/60 px-4 py-2 rounded-2xl backdrop-blur-md pointer-events-auto border border-white/10 shadow-xl">
+                    <div className="text-[10px] text-white/40 uppercase font-black tracking-widest mb-0.5">Sala</div>
+                    <div className="font-mono font-bold text-[#f0d0a0] text-sm tracking-tighter">{room.id}</div>
                   </div>
 
                   {/* Center: Opponents */}
-                  <div className="flex gap-4 pointer-events-auto">
+                  <div className="flex gap-3 pointer-events-auto">
                     {room.players.filter(p => p.id !== playerId).map(p => (
                       <div key={p.id} className={cn(
-                        "flex flex-col items-center p-2 rounded-lg transition-all backdrop-blur-md",
-                        room.players[room.currentTurnIndex].id === p.id ? "bg-[#f0d0a0]/20 scale-110 border border-[#f0d0a0]/50 shadow-[0_0_15px_rgba(240,208,160,0.3)]" : "bg-black/40 border border-white/10"
+                        "flex flex-col items-center p-2.5 rounded-2xl transition-all duration-500 backdrop-blur-lg border shadow-lg",
+                        room.players[room.currentTurnIndex].id === p.id 
+                          ? "bg-[#f0d0a0]/30 scale-110 border-[#f0d0a0]/50 shadow-[0_0_20px_rgba(240,208,160,0.4)]" 
+                          : "bg-black/40 border-white/5 opacity-80"
                       )}>
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center border border-white/20 mb-1 shadow-lg relative">
-                           <span className="text-xs font-bold text-white tracking-wider">{p.name.substring(0, 2).toUpperCase()}</span>
+                        <div className="w-11 h-11 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center border border-white/20 mb-1.5 shadow-inner relative">
+                           <span className="text-xs font-black text-white">{p.name.substring(0, 2).toUpperCase()}</span>
                            {room.players[room.currentTurnIndex].id === p.id && (
-                             <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-gray-900 animate-pulse" />
+                             <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-400 rounded-full border-2 border-slate-900 animate-pulse shadow-sm" />
                            )}
                         </div>
-                        <div className="text-xs text-white font-medium drop-shadow-md">{p.name}</div>
-                        <div className="flex items-center gap-1 mt-1 bg-black/50 px-2 py-0.5 rounded-full border border-white/5">
-                          <div className="w-2 h-3 bg-white/40 rounded-[1px]"></div>
-                          <span className="text-xs font-mono text-[#f0d0a0]">{p.hand?.length || 0}</span>
+                        <div className="text-[10px] text-white font-bold tracking-wide max-w-[60px] truncate">{p.name}</div>
+                        <div className="flex items-center gap-1 mt-1 bg-black/60 px-2.5 py-0.5 rounded-full border border-white/5">
+                          <div className="w-2 h-3 bg-[#f0d0a0] rounded-[1px] opacity-70"></div>
+                          <span className="text-[11px] font-black text-[#f0d0a0]">{p.hand?.length || 0}</span>
                         </div>
-                        {room.players[room.currentTurnIndex].id === p.id && (
-                           <div className="text-[10px] text-[#f0d0a0] animate-pulse mt-1 font-bold tracking-wide">JOGANDO...</div>
-                        )}
                       </div>
                     ))}
                   </div>
 
                   {/* Right: Timer */}
                   <div className={cn(
-                    "p-2 rounded-lg backdrop-blur-sm transition-all pointer-events-auto border",
-                    timeLeft < 10 ? "bg-red-500/20 border-red-500/50 animate-pulse" : "bg-black/40 border-white/10"
+                    "px-4 py-2 rounded-2xl backdrop-blur-md transition-all duration-300 pointer-events-auto border shadow-xl flex flex-col items-center min-w-[70px]",
+                    timeLeft < 10 ? "bg-red-500/30 border-red-500/50 animate-pulse" : "bg-black/60 border-white/10"
                   )}>
-                    <div className="text-[10px] text-white/60 text-center uppercase tracking-wider">Tempo</div>
-                    <div className={cn("font-mono font-bold text-center text-sm", timeLeft < 10 ? "text-red-400" : "text-white")}>
-                      {timeLeft}s
+                    <div className="text-[10px] text-white/40 font-black uppercase tracking-widest mb-0.5">Tempo</div>
+                    <div className={cn("font-mono font-black text-lg leading-none", timeLeft < 10 ? "text-red-400" : "text-white")}>
+                      {timeLeft}
                     </div>
                   </div>
                 </div>
@@ -1469,16 +1468,20 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   )}
                 </div>
 
-                <div className="flex flex-wrap justify-center gap-2 pb-4 px-4 min-h-[140px] items-center overflow-y-auto max-h-[200px]">
+                <div className="flex overflow-x-auto no-scrollbar gap-3 pb-6 px-4 min-h-[160px] items-center justify-start md:justify-center">
                   {room.players.find(p => p.id === playerId)?.hand?.map((piece, i) => {
-                    const id = `piece-${Math.min(piece.left, piece.right)}-${Math.max(piece.left, piece.right)}`;
+                    const id = `piece-${i}-${piece.left}-${piece.right}`;
+                    const fitsLeft = piece.left === room.leftEnd || piece.right === room.leftEnd;
+                    const fitsRight = piece.left === room.rightEnd || piece.right === room.rightEnd;
+                    const canPlayThis = isMyTurn && (room.board.length === 0 || fitsLeft || fitsRight);
+
                     return (
                       <motion.div
-                        key={id} // Use ID as key for stability
+                        key={id}
                         layoutId={id}
                         drag={isMyTurn}
                         dragSnapToOrigin
-                        dragElastic={0.1}
+                        dragElastic={0.2}
                         dragMomentum={false}
                         onClick={() => {
                           if (!isMyTurn || isProcessing) return;

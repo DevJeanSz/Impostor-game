@@ -14,7 +14,7 @@ O objetivo é simples: **Juntar a galera e se divertir!**
 
 Atualmente, contamos com 3 jogos incríveis:
 
-### 👻 1. Los Priemos (Impostor)
+### 👻 1. Quem é o impostor?
 *Inspirado no clássico "Spyfall" ou "O Impostor".*
 
 **Como funciona:**

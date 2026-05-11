@@ -5,6 +5,8 @@ import { WhoIsMostLikelyGame } from './games/WhoIsMostLikelyGame';
 import { CharadesGame } from './games/CharadesGame';
 import { TermoGame } from './games/TermoGame';
 import { DominoGame } from './games/DominoGame';
+import { WhoAmIGame } from './games/WhoAmIGame';
+
 import { AnimatePresence, motion } from 'motion/react';
 
 function App() {
@@ -80,6 +82,16 @@ function App() {
             className="h-screen"
           >
             <DominoGame onBack={() => setCurrentGame(null)} />
+          </motion.div>
+        ) : currentGame === 'who-am-i' ? (
+          <motion.div
+            key="who-am-i"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            className="h-screen"
+          >
+            <WhoAmIGame onBack={() => setCurrentGame(null)} />
           </motion.div>
         ) : null}
       </AnimatePresence>

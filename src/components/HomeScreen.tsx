@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Ghost, Users, Zap, Type, GripHorizontal } from 'lucide-react';
+import { Ghost, Users, Zap, Type, GripHorizontal, User } from 'lucide-react';
 
 interface HomeScreenProps {
   onSelectGame: (gameId: string) => void;
@@ -10,7 +10,7 @@ export function HomeScreen({ onSelectGame }: HomeScreenProps) {
   const games = [
     {
       id: 'impostor',
-      title: 'Los Priemos',
+      title: 'Quem é o impostor?',
       description: 'Descubra quem está mentindo entre vocês.',
       icon: Ghost,
       color: 'bg-indigo-500',
@@ -62,6 +62,17 @@ export function HomeScreen({ onSelectGame }: HomeScreenProps) {
       iconColor: 'text-green-400',
       bg: 'bg-green-950/30',
       border: 'border-green-500/20'
+    },
+    {
+      id: 'who-am-i',
+      title: 'Quem Sou Eu?',
+      description: 'Adivinhe quem você é com ajuda dos amigos.',
+      icon: User,
+      color: 'bg-rose-500',
+      iconBg: 'bg-rose-500/20',
+      iconColor: 'text-rose-400',
+      bg: 'bg-rose-950/30',
+      border: 'border-rose-500/20'
     }
   ];
 
