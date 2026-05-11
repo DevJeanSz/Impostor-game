@@ -975,12 +975,15 @@ export function DominoGame({ onBack }: DominoGameProps) {
     let inlineStyle = {};
     
     if (isSmall) {
+      // Peças do tabuleiro: proporção 2:1 igual a um dominó real (não quadrado!)
       inlineStyle = {
-        width: PIECE_WIDTH / 2,
-        height: PIECE_HEIGHT
+        width: PIECE_WIDTH,   // 80px — comprimento do dominó
+        height: PIECE_HEIGHT  // 40px — largura do dominó
       };
     } else {
-      sizeClass = isHorizontal ? "w-24 h-12 md:w-32 md:h-16" : "w-12 h-24 md:w-16 md:h-32";
+      sizeClass = isHorizontal
+        ? "w-20 h-10 sm:w-24 sm:h-12 md:w-32 md:h-16"
+        : "w-10 h-20 sm:w-12 sm:h-24 md:w-16 md:h-32";
     }
 
     return (
@@ -1468,7 +1471,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   )}
                 </div>
 
-                <div className="flex overflow-x-auto no-scrollbar gap-3 pb-6 px-4 min-h-[160px] items-center justify-start md:justify-center">
+                <div className="flex overflow-x-auto no-scrollbar gap-2 pb-4 px-2 min-h-[110px] sm:min-h-[140px] items-center justify-start md:justify-center">
                   {(room.players ?? []).find(p => p.id === playerId)?.hand?.map((piece, i) => {
                     const id = `piece-${i}-${piece.left}-${piece.right}`;
                     const fitsLeft = piece.left === room.leftEnd || piece.right === room.leftEnd;
