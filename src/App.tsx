@@ -4,7 +4,6 @@ import { ImpostorGame } from './games/ImpostorGame';
 import { WhoIsMostLikelyGame } from './games/WhoIsMostLikelyGame';
 import { CharadesGame } from './games/CharadesGame';
 import { TermoGame } from './games/TermoGame';
-import { DominoGame } from './games/DominoGame';
 import { WhoAmIGame } from './games/WhoAmIGame';
 
 import { AnimatePresence, motion } from 'motion/react';
@@ -15,9 +14,6 @@ function App() {
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const gameParam = params.get('game');
-    if (gameParam === 'domino') {
-      setCurrentGame('domino');
-    }
   }, []);
 
   return (
@@ -72,16 +68,6 @@ function App() {
             className="h-screen"
           >
             <TermoGame onBack={() => setCurrentGame(null)} />
-          </motion.div>
-        ) : currentGame === 'domino' ? (
-          <motion.div
-            key="domino"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            className="h-screen"
-          >
-            <DominoGame onBack={() => setCurrentGame(null)} />
           </motion.div>
         ) : currentGame === 'who-am-i' ? (
           <motion.div

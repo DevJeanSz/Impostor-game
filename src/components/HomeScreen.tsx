@@ -53,17 +53,6 @@ export function HomeScreen({ onSelectGame }: HomeScreenProps) {
       border: 'border-emerald-500/20'
     },
     {
-      id: 'domino',
-      title: 'Dominó Online',
-      description: 'Jogue com amigos em tempo real.',
-      icon: GripHorizontal,
-      color: 'bg-green-500',
-      iconBg: 'bg-green-500/20',
-      iconColor: 'text-green-400',
-      bg: 'bg-green-950/30',
-      border: 'border-green-500/20'
-    },
-    {
       id: 'who-am-i',
       title: 'Quem Sou Eu?',
       description: 'Adivinhe quem você é com ajuda dos amigos.',
