@@ -1529,7 +1529,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                           {renderPiece(piece, false, 'vertical')}
                         </motion.div>
                       );
-                  ); })}
+                    })}
                 </div>
               </div>
             </div>
