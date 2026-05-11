@@ -932,8 +932,8 @@ export function DominoGame({ onBack }: DominoGameProps) {
   // 6 7 8
   const renderDots = (value: number, isSmall = false) => {
     const dotColors: Record<number, string> = {
-      1: "#f59e0b", 2: "#ef4444", 3: "#10b981", 
-      4: "#3b82f6", 5: "#06b6d4", 6: "#8b5cf6"
+      1: "#d97706", 2: "#dc2626", 3: "#16a34a", 
+      4: "#2563eb", 5: "#0891b2", 6: "#7c3aed"
     };
 
     const positions: Record<number, number[]> = {
@@ -942,20 +942,20 @@ export function DominoGame({ onBack }: DominoGameProps) {
     };
 
     const dotIndices = positions[value] || [];
-    const color = dotColors[value] || "#1e293b";
+    const color = dotColors[value] || "#334155";
 
     return (
-      <div className="grid grid-cols-3 grid-rows-3 w-full h-full p-[18%] gap-[1.5px]">
+      <div className="grid grid-cols-3 grid-rows-3 w-full h-full p-[20%] gap-[1px]">
         {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => (
-          <div key={i} className="flex items-center justify-center">
+          <div key={i} className="flex items-center justify-center relative">
             {dotIndices.includes(i) && (
               <motion.div 
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 style={{ backgroundColor: color }}
                 className={cn(
-                  "rounded-full shadow-sm",
-                  isSmall ? "w-[7px] h-[7px]" : "w-3.5 h-3.5 md:w-5 md:h-5"
+                  "rounded-full shadow-[inset_0_1px_1px_rgba(0,0,0,0.1)]",
+                  isSmall ? "w-[5px] h-[5px]" : "w-[8px] h-[8px] md:w-[10px] md:h-[10px]"
                 )} 
               />
             )}
@@ -967,32 +967,36 @@ export function DominoGame({ onBack }: DominoGameProps) {
 
   const renderPiece = (piece: DominoPiece, isSmall = false, orientation: 'vertical' | 'horizontal' = 'vertical') => {
     const isHorizontal = orientation === 'horizontal';
-    
-    // Tamanhos fixos vindos da fonte única de verdade
     const width = isHorizontal ? PW : PH;
     const height = isHorizontal ? PH : PW;
-    
+    const scale = isSmall ? 0.75 : 1;
+
     return (
       <div 
         className={cn(
-          "relative rounded-md flex items-center justify-between select-none overflow-hidden shrink-0",
-          "bg-[#fdfcf8] border border-black/20 shadow-md",
+          "relative rounded-[4px] flex items-center justify-between select-none overflow-hidden shrink-0",
+          "bg-[#fdfcf8] border border-black/30 shadow-md",
           isHorizontal ? "flex-row" : "flex-col"
         )}
-        style={{ width: isSmall ? width * 0.8 : width, height: isSmall ? height * 0.8 : height }}
+        style={{ 
+          width: width * scale, 
+          height: height * scale,
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1), inset 0 2px 4px rgba(255,255,255,0.8)'
+        }}
       >
-        <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/5 pointer-events-none" />
+        {/* Ivory bevel effect */}
+        <div className="absolute inset-0 border border-white/40 pointer-events-none rounded-[3px]" />
         
-        <div className="flex-1 w-full h-full flex items-center justify-center relative p-1">
+        <div className="flex-1 w-full h-full flex items-center justify-center relative">
           {renderDots(piece.left, isSmall)}
         </div>
         
         <div className={cn(
-          "bg-black/10", 
-          isHorizontal ? "w-[1px] h-[85%]" : "w-[85%] h-[1px]"
+          "bg-black/20", 
+          isHorizontal ? "w-[1.5px] h-[75%]" : "w-[75%] h-[1.5px]"
         )} />
         
-        <div className="flex-1 w-full h-full flex items-center justify-center relative p-1">
+        <div className="flex-1 w-full h-full flex items-center justify-center relative">
           {renderDots(piece.right, isSmall)}
         </div>
       </div>
@@ -1452,7 +1456,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   )}
                 </div>
 
-                <div className="flex overflow-x-auto no-scrollbar gap-2 pb-4 px-2 min-h-[110px] sm:min-h-[140px] items-center justify-start md:justify-center">
+                <div className="flex overflow-x-auto no-scrollbar gap-3 pb-6 px-4 min-h-[150px] items-end justify-start md:justify-center">
                   {(room.players ?? []).find(p => p.id === playerId)?.hand?.map((piece, i) => {
                     const id = `piece-${i}-${piece.left}-${piece.right}`;
                     const fitsLeft = piece.left === room.leftEnd || piece.right === room.leftEnd;
@@ -1463,10 +1467,14 @@ export function DominoGame({ onBack }: DominoGameProps) {
                         <motion.div
                           key={id}
                           layoutId={id}
-                          drag={isMyTurn && canPlayThis}
-                          dragSnapToOrigin
-                          dragElastic={0.1}
-                          dragMomentum={false}
+                          className={cn(
+                            "relative shrink-0 touch-none transition-all duration-300", 
+                            isMyTurn && canPlayThis 
+                              ? "brightness-110 drop-shadow-[0_10px_20px_rgba(0,0,0,0.4)] scale-105 z-10 cursor-pointer" 
+                              : "opacity-40 grayscale-[0.5] scale-95 cursor-not-allowed",
+                            selectedPiece === piece && "-translate-y-12 z-50 scale-110"
+                          )}
+                          style={{ width: PH, height: PW }}
                           onClick={() => {
                             if (!isMyTurn || isProcessing || !canPlayThis) return;
 
@@ -1489,13 +1497,6 @@ export function DominoGame({ onBack }: DominoGameProps) {
                               setSelectedPiece(selectedPiece === piece ? null : piece);
                             }
                           }}
-                          className={cn(
-                            "relative flex-shrink-0 touch-none transition-all duration-500", 
-                            isMyTurn && canPlayThis 
-                              ? "brightness-125 drop-shadow-[0_15px_30px_rgba(0,0,0,0.5)] scale-110 z-10 cursor-pointer" 
-                              : "opacity-30 grayscale-[0.8] scale-90 cursor-not-allowed",
-                            selectedPiece === piece && "ring-4 ring-yellow-400 -translate-y-12 z-50 shadow-[0_30px_60px_rgba(0,0,0,0.8)]"
-                          )}
                         >
                           {isMyTurn && canPlayThis && (
                             <div className="absolute inset-0 bg-green-400/10 rounded-lg animate-pulse pointer-events-none ring-2 ring-green-400/50" />
