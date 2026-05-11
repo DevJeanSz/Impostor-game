@@ -83,9 +83,9 @@ export function DominoGame({ onBack }: DominoGameProps) {
     return () => observer.disconnect();
   }, []);
 
-  // Layout Constants (Elite Design)
-  const PIECE_WIDTH = 90;
-  const PIECE_HEIGHT = 45;
+  // Constantes Globais de Design (Fonte Única de Verdade)
+  const PW = 80; // Largura da peça horizontal
+  const PH = 40; // Altura da peça horizontal (metade da largura)
   const GAP = 2;
 
 
@@ -106,8 +106,6 @@ export function DominoGame({ onBack }: DominoGameProps) {
     }
     
     const tempLayout: any[] = [];
-    const PW = PIECE_WIDTH;
-    const PH = PIECE_HEIGHT;
     const G = GAP;
     
     // Limits based on screen
@@ -123,9 +121,9 @@ export function DominoGame({ onBack }: DominoGameProps) {
       const piece = pieces[i];
       const isDouble = piece.piece.left === piece.piece.right;
       
-      // No board fixo: normal é horizontal (90x45), double é vertical (45x90)
+      // No board: normal é sempre horizontal, double é sempre vertical
       const orientation = isDouble ? 'vertical' : 'horizontal';
-      const visualWidth = isDouble ? PH : PW; // PH=45, PW=90
+      const visualWidth = isDouble ? PH : PW; 
 
       tempLayout.push({
         ...piece,
@@ -136,24 +134,24 @@ export function DominoGame({ onBack }: DominoGameProps) {
         isDouble
       });
 
-      // Bounds para centralização
+      // Bounds para escala dinâmica
       minX = Math.min(minX, curX - PW/2);
       maxX = Math.max(maxX, curX + PW/2);
       minY = Math.min(minY, curY - PW/2);
       maxY = Math.max(maxY, curY + PW/2);
 
-      // Calcular posição da PRÓXIMA peça
+      // Próxima peça
       const nextPiece = pieces[i+1];
       if (nextPiece) {
         const nextIsDouble = nextPiece.piece.left === nextPiece.piece.right;
         const nextVisualWidth = nextIsDouble ? PH : PW;
         
-        // Distância perfeita entre centros
-        const step = (visualWidth / 2) + (nextVisualWidth / 2) + G;
+        // Distância exata: metade da largura de cada peça + gap
+        const step = (visualWidth / 2) + (nextVisualWidth / 2) + GAP;
 
-        // Lógica de "Snake" (curva)
+        // Curva de retorno (Snake)
         if (Math.abs(curX + curDir * step) > maxRowWidth / 2) {
-          curY += PW + G; // Desce uma "carreira"
+          curY += PW + GAP; 
           curDir *= -1;
         } else {
           curX += curDir * step;
@@ -934,29 +932,20 @@ export function DominoGame({ onBack }: DominoGameProps) {
   // 6 7 8
   const renderDots = (value: number, isSmall = false) => {
     const dotColors: Record<number, string> = {
-      1: "#f59e0b", // Amber
-      2: "#ef4444", // Red
-      3: "#10b981", // Emerald
-      4: "#3b82f6", // Blue
-      5: "#06b6d4", // Cyan
-      6: "#8b5cf6", // Violet
+      1: "#f59e0b", 2: "#ef4444", 3: "#10b981", 
+      4: "#3b82f6", 5: "#06b6d4", 6: "#8b5cf6"
     };
 
     const positions: Record<number, number[]> = {
-      0: [],
-      1: [4],
-      2: [2, 6], 
-      3: [2, 4, 6],
-      4: [0, 2, 6, 8],
-      5: [0, 2, 4, 6, 8],
-      6: [0, 2, 3, 5, 6, 8]
+      0: [], 1: [4], 2: [2, 6], 3: [2, 4, 6],
+      4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8]
     };
 
     const dotIndices = positions[value] || [];
     const color = dotColors[value] || "#1e293b";
 
     return (
-      <div className="grid grid-cols-3 grid-rows-3 w-full h-full p-[16%] gap-[1.5px]">
+      <div className="grid grid-cols-3 grid-rows-3 w-full h-full p-[18%] gap-[1.5px]">
         {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => (
           <div key={i} className="flex items-center justify-center">
             {dotIndices.includes(i) && (
@@ -966,7 +955,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                 style={{ backgroundColor: color }}
                 className={cn(
                   "rounded-full shadow-sm",
-                  isSmall ? "w-2.5 h-2.5" : "w-3.5 h-3.5 md:w-5 md:h-5"
+                  isSmall ? "w-[7px] h-[7px]" : "w-3.5 h-3.5 md:w-5 md:h-5"
                 )} 
               />
             )}
@@ -979,40 +968,33 @@ export function DominoGame({ onBack }: DominoGameProps) {
   const renderPiece = (piece: DominoPiece, isSmall = false, orientation: 'vertical' | 'horizontal' = 'vertical') => {
     const isHorizontal = orientation === 'horizontal';
     
-    // Proporções áureas (100x50 ou 70x35)
-    const w = isSmall ? 70 : 100;
-    const h = isSmall ? 35 : 50;
+    // Tamanhos fixos vindos da fonte única de verdade
+    const width = isHorizontal ? PW : PH;
+    const height = isHorizontal ? PH : PW;
     
     return (
       <div 
         className={cn(
-          "relative rounded-md flex items-center justify-between select-none overflow-hidden transition-all duration-300",
-          "bg-[#fcfaf5] border border-black/15 shadow-md",
+          "relative rounded-md flex items-center justify-between select-none overflow-hidden shrink-0",
+          "bg-[#fdfcf8] border border-black/20 shadow-md",
           isHorizontal ? "flex-row" : "flex-col"
         )}
-        style={{ 
-          width: isHorizontal ? w : h, 
-          height: isHorizontal ? h : w 
-        }}
+        style={{ width: isSmall ? width * 0.8 : width, height: isSmall ? height * 0.8 : height }}
       >
-        {/* Ivory Gloss Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-black/5 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/5 pointer-events-none" />
         
         <div className="flex-1 w-full h-full flex items-center justify-center relative p-1">
           {renderDots(piece.left, isSmall)}
         </div>
         
         <div className={cn(
-          "bg-black/10 shadow-[inset_0.5px_0.5px_1px_rgba(0,0,0,0.1)]", 
-          isHorizontal ? "w-[1.5px] h-[85%]" : "w-[85%] h-[1.5px]"
+          "bg-black/10", 
+          isHorizontal ? "w-[1px] h-[85%]" : "w-[85%] h-[1px]"
         )} />
         
         <div className="flex-1 w-full h-full flex items-center justify-center relative p-1">
           {renderDots(piece.right, isSmall)}
         </div>
-
-        {/* Central Brass Pin */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-gradient-to-br from-slate-400 to-slate-600 rounded-full shadow-sm opacity-40 z-10" />
       </div>
     );
   };
