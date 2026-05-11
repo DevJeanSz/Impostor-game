@@ -172,7 +172,7 @@ export function TimerScreen({ onFinish, startingPlayer }: TimerScreenProps) {
               className="w-full bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-400 hover:to-orange-400 text-white font-bold py-4 rounded-2xl shadow-lg shadow-red-900/20 flex items-center justify-center gap-2 transition-all transform active:scale-95"
             >
               <CheckCircle2 size={20} />
-              Revelar Impostor
+              Revelar
             </button>
           )}
         </div>

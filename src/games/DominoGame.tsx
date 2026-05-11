@@ -83,10 +83,10 @@ export function DominoGame({ onBack }: DominoGameProps) {
     return () => observer.disconnect();
   }, []);
 
-  // Layout Constants
-  const PIECE_WIDTH = 80;
-  const PIECE_HEIGHT = 40;
-  const GAP = 1;
+  // Layout Constants (Elite Design)
+  const PIECE_WIDTH = 90;
+  const PIECE_HEIGHT = 45;
+  const GAP = 2;
 
 
   // Calculate Snake Layout
@@ -123,22 +123,16 @@ export function DominoGame({ onBack }: DominoGameProps) {
       const piece = pieces[i];
       const isDouble = piece.piece.left === piece.piece.right;
       
-      // A largura visual na linha de jogo muda se for double (que fica de pé)
-      const visualWidth = isDouble ? PH : PW;
-      
-      // Verifica se precisa virar (curva do snake)
-      const predictedX = curX + (curDir * visualWidth);
-      let isTurnPiece = false;
-      if (i > 0 && ((curDir === 1 && predictedX > maxRowWidth/2) || (curDir === -1 && predictedX < -maxRowWidth/2))) {
-        isTurnPiece = true;
-      }
-
+      // Orientação visual baseada na direção do fluxo
       let rotation = 0;
-      if (isTurnPiece) {
-        rotation = 90;
+      let orientation: 'vertical' | 'horizontal' = 'horizontal';
+
+      if (isDouble) {
+        orientation = 'vertical'; // Carroças sempre verticais na linha de jogo
+        rotation = 0;
       } else {
-        // Doubles sempre ficam a 90 graus da linha de jogo
-        rotation = isDouble ? 90 : (curDir === 1 ? 0 : 180);
+        orientation = 'horizontal';
+        rotation = curDir === 1 ? 0 : 180;
       }
 
       tempLayout.push({
@@ -146,8 +140,8 @@ export function DominoGame({ onBack }: DominoGameProps) {
         x: curX,
         y: curY,
         rotation,
-        isDouble,
-        isTurnPiece
+        orientation,
+        isDouble
       });
 
       // Bounds
@@ -157,20 +151,27 @@ export function DominoGame({ onBack }: DominoGameProps) {
       maxY = Math.max(maxY, curY + PW);
 
       // Calcular posição da PRÓXIMA peça
-      if (isTurnPiece) {
-        curY += PW + G;
-        curDir *= -1;
-      } else {
-        // Distância entre centros depende do tipo da peça atual e da próxima
-        const nextPiece = pieces[i+1];
-        const nextIsDouble = nextPiece?.piece.left === nextPiece?.piece.right;
+      const nextPiece = pieces[i+1];
+      if (nextPiece) {
+        const nextIsDouble = nextPiece.piece.left === nextPiece.piece.right;
         
-        // Espaçamento matemático perfeito: metade da largura atual + metade da próxima
-        const currentHalf = (isDouble ? PH : PW) / 2;
-        const nextHalf = (nextIsDouble ? PH : PW) / 2;
-        const step = currentHalf + nextHalf + G;
+        // Espaçamento Inteligente:
+        // Se a atual é double e vertical, ela ocupa PH de largura.
+        // Se a atual é normal e horizontal, ela ocupa PW de largura.
+        const currentVisualWidth = isDouble ? PH : PW;
+        const nextVisualWidth = nextIsDouble ? PH : PW;
         
-        curX += curDir * step;
+        const step = (currentVisualWidth / 2) + (nextVisualWidth / 2) + G;
+
+        // Verificar se precisa virar (limite da largura)
+        const predictedX = curX + (curDir * step);
+        if (Math.abs(predictedX) > maxRowWidth / 2) {
+          curY += PW + G;
+          curDir *= -1;
+          // Quando vira, o step é diferente
+        } else {
+          curX += curDir * step;
+        }
       }
     }
     
@@ -980,48 +981,46 @@ export function DominoGame({ onBack }: DominoGameProps) {
   const renderPiece = (piece: DominoPiece, isSmall = false, orientation: 'vertical' | 'horizontal' = 'vertical') => {
     const isHorizontal = orientation === 'horizontal';
     
-    let sizeClass = "";
-    let inlineStyle = {};
+    // Dimensões baseadas na escala elite
+    const w = isSmall ? 70 : 84;
+    const h = isSmall ? 35 : 42;
     
-    if (isSmall) {
-      // Proporção 2:1 exata para as peças do tabuleiro
-      inlineStyle = {
-        width: 70,  
-        height: 35
-      };
-    } else {
-      sizeClass = isHorizontal
-        ? "w-20 h-10 sm:w-24 sm:h-12 md:w-32 md:h-16"
-        : "w-10 h-20 sm:w-12 sm:h-24 md:w-16 md:h-32";
-    }
+    const inlineStyle = {
+      width: isHorizontal ? w : h,
+      height: isHorizontal ? h : w,
+    };
 
     return (
       <div 
         className={cn(
-          "relative bg-[#fdfbf7] rounded-lg flex items-center justify-between select-none overflow-hidden transition-transform duration-300",
-          "shadow-[2px_2px_0px_0px_#d1d5db,4px_4px_8px_0px_rgba(0,0,0,0.3)] hover:shadow-[3px_3px_0px_0px_#d1d5db,6px_6px_12px_0px_rgba(0,0,0,0.4)]",
-          isHorizontal ? "flex-row" : "flex-col",
-          sizeClass
+          "relative rounded-[6px] flex items-center justify-between select-none overflow-hidden transition-all duration-300",
+          "bg-gradient-to-br from-[#f8f5f0] via-[#ffffff] to-[#e8e4da]",
+          "shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_-1px_0_rgba(0,0,0,0.1)_inset,0_4px_8px_rgba(0,0,0,0.3),0_10px_20px_rgba(0,0,0,0.15)]",
+          isHorizontal ? "flex-row" : "flex-col"
         )}
         style={inlineStyle}
       >
-        <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-black/5 pointer-events-none" />
+        {/* Camada de brilho/profundidade */}
+        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent pointer-events-none" />
         
-        <div className="flex-1 w-full h-full flex items-center justify-center relative">
+        {/* Metade 1 */}
+        <div className="flex-1 w-full h-full flex items-center justify-center relative p-1.5">
           {renderDots(piece.left, isSmall)}
         </div>
         
+        {/* Divisor Central (Entalhado) */}
         <div className={cn(
-          "bg-slate-300 shadow-[inset_1px_1px_1px_rgba(0,0,0,0.1)]", 
-          isHorizontal ? "w-[2px] h-[70%]" : "w-[70%] h-[2px]"
+          "bg-black/10 shadow-[inset_0.5px_0.5px_1px_rgba(0,0,0,0.2)]", 
+          isHorizontal ? "w-[1.5px] h-[80%]" : "w-[80%] h-[1.5px]"
         )} />
         
-        <div className="flex-1 w-full h-full flex items-center justify-center relative">
+        {/* Metade 2 */}
+        <div className="flex-1 w-full h-full flex items-center justify-center relative p-1.5">
           {renderDots(piece.right, isSmall)}
         </div>
 
-        {/* Pin in the middle for double-sided look */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-1 bg-slate-400 rounded-full shadow-inner opacity-40" />
+        {/* Pinagem Central (Visual) */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-gradient-to-br from-slate-400 to-slate-600 rounded-full shadow-sm opacity-60 z-10" />
       </div>
     );
   };
@@ -1331,8 +1330,14 @@ export function DominoGame({ onBack }: DominoGameProps) {
               </AnimatePresence>
 
               {/* Game Board Area */}
-              <div ref={boardRef} className="flex-1 m-2 flex items-center justify-center relative overflow-hidden rounded-3xl shadow-[inset_0_4px_20px_rgba(0,0,0,0.4)] bg-[#1a472a] border border-white/5 group">
-                {/* Felt texture overlay */}
+              <div ref={boardRef} className="flex-1 m-2 flex items-center justify-center relative overflow-hidden rounded-3xl shadow-inner bg-[#075e54] border border-white/5 group">
+                
+                {/* Felt texture overlay (Paciencia Style) */}
+                <div className="absolute inset-0 opacity-10 pointer-events-none mix-blend-overlay"
+                     style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/felt.png")' }}></div>
+                
+                {/* Ambient vignette */}
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,transparent_50%,rgba(0,0,0,0.3)_100%)] pointer-events-none"></div>
                 <div className="absolute inset-0 opacity-40 pointer-events-none mix-blend-overlay"
                      style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/felt.png")' }}></div>
                 
@@ -1362,7 +1367,6 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   </div>
                 ) : (
                   <div className="w-full h-full overflow-hidden flex items-center justify-center">
-                    {/* Scaled Board Container */}
                     <div 
                       className="relative transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] origin-center" 
                       style={{ 
@@ -1383,12 +1387,11 @@ export function DominoGame({ onBack }: DominoGameProps) {
                               className="absolute origin-center"
                               style={item.style}
                             >
-                              {renderPiece(item.piece, true, 'horizontal')}
+                              {renderPiece(item.piece, true, item.orientation)}
                             </motion.div>
                           );
                        })}
                        
-                       {/* Drop Zones */}
                        <div className="absolute transition-all duration-300" style={zonePositions.left}>
                           {renderZone('left')}
                        </div>
@@ -1399,15 +1402,12 @@ export function DominoGame({ onBack }: DominoGameProps) {
                   </div>
                 )}
                 
-                {/* Opponents Hands & Status - Glassmorphism UI */}
                 <div className="absolute top-4 left-0 right-0 px-4 flex justify-between items-start pointer-events-none z-30">
-                  {/* Left: Room Info */}
                   <div className="bg-black/60 px-4 py-2 rounded-2xl backdrop-blur-md pointer-events-auto border border-white/10 shadow-xl">
                     <div className="text-[10px] text-white/40 uppercase font-black tracking-widest mb-0.5">Sala</div>
                     <div className="font-mono font-bold text-[#f0d0a0] text-sm tracking-tighter">{room.id}</div>
                   </div>
 
-                  {/* Center: Opponents */}
                   <div className="flex gap-3 pointer-events-auto">
                     {(room.players ?? []).filter(p => p.id !== playerId).map(p => (
                       <div key={p.id} className={cn(
@@ -1431,7 +1431,6 @@ export function DominoGame({ onBack }: DominoGameProps) {
                     ))}
                   </div>
 
-                  {/* Right: Timer */}
                   <div className={cn(
                     "px-4 py-2 rounded-2xl backdrop-blur-md transition-all duration-300 pointer-events-auto border shadow-xl flex flex-col items-center min-w-[70px]",
                     timeLeft < 10 ? "bg-red-500/30 border-red-500/50 animate-pulse" : "bg-black/60 border-white/10"
@@ -1444,17 +1443,16 @@ export function DominoGame({ onBack }: DominoGameProps) {
                 </div>
               </div>
 
-              {/* Player Hand & Controls */}
               <div className={cn(
-                "bg-black/80 border-t border-[#f0d0a0]/30 p-4 pb-8 backdrop-blur-md relative z-20 transition-all duration-500",
-                isMyTurn && "bg-[#f0d0a0]/10 shadow-[0_-4px_20px_rgba(240,208,160,0.2)]" // Highlight active hand
+                "bg-[#064e3b]/90 border-t border-white/10 p-4 pb-8 backdrop-blur-md relative z-20 transition-all duration-500",
+                isMyTurn && "shadow-[0_-8px_30px_rgba(0,0,0,0.5)]" 
               )}>
                 <div className="flex justify-between items-center mb-4 px-2">
                   <p className={cn(
-                    "text-xs uppercase font-bold transition-colors",
-                    isMyTurn ? "text-[#f0d0a0] animate-pulse" : "text-white/50"
+                    "text-xs uppercase font-black tracking-widest transition-colors",
+                    isMyTurn ? "text-green-300" : "text-white/30"
                   )}>
-                    {isMyTurn ? "Sua Vez! Arraste uma peça para a mesa" : "Aguarde..."}
+                    {isMyTurn ? "Sua Vez • Escolha uma peça destacada" : "Aguardando Oponente..."}
                   </p>
                   
                   {isMyTurn && !hasValidMove && (
@@ -1487,94 +1485,50 @@ export function DominoGame({ onBack }: DominoGameProps) {
                     const fitsRight = piece.left === room.rightEnd || piece.right === room.rightEnd;
                     const canPlayThis = isMyTurn && ((room.board?.length ?? 0) === 0 || fitsLeft || fitsRight);
 
-                    return (
-                      <motion.div
-                        key={id}
-                        layoutId={id}
-                        drag={isMyTurn}
-                        dragSnapToOrigin
-                        dragElastic={0.2}
-                        dragMomentum={false}
-                        onClick={() => {
-                          if (!isMyTurn || isProcessing) return;
+                      return (
+                        <motion.div
+                          key={id}
+                          layoutId={id}
+                          drag={isMyTurn && canPlayThis}
+                          dragSnapToOrigin
+                          dragElastic={0.1}
+                          dragMomentum={false}
+                          onClick={() => {
+                            if (!isMyTurn || isProcessing || !canPlayThis) return;
 
-                          const leftEnd = room.leftEnd;
-                          const rightEnd = room.rightEnd;
-                          
-                          const fitsLeft = piece.left === leftEnd || piece.right === leftEnd;
-                          const fitsRight = piece.left === rightEnd || piece.right === rightEnd;
-                          
-                          // Se o board está vazio, qualquer peça cabe (primeira jogada)
-                          if (!room.board || room.board.length === 0) {
-                            playPiece(piece, 'left');
-                            return;
-                          }
-
-                          if (fitsLeft && !fitsRight) {
-                            playPiece(piece, 'left');
-                          } else if (fitsRight && !fitsLeft) {
-                            playPiece(piece, 'right');
-                          } else if (fitsLeft && fitsRight) {
-                            // Fits both! Require selection and zone tap.
-                            if (selectedPiece === piece) {
-                              setSelectedPiece(null);
-                            } else {
-                              setSelectedPiece(piece);
+                            const leftEnd = room.leftEnd;
+                            const rightEnd = room.rightEnd;
+                            
+                            const fitsLeft = piece.left === leftEnd || piece.right === leftEnd;
+                            const fitsRight = piece.left === rightEnd || piece.right === rightEnd;
+                            
+                            if ((room.board?.length ?? 0) === 0) {
+                              playPiece(piece, 'left');
+                              return;
                             }
-                          }
-                        }}
-                      onDragStart={() => {
-                        setIsDragging(true);
-                        setSelectedPiece(piece); // Auto-select on drag
-                      }}
-                      onDragEnd={(_, info) => {
-                        setIsDragging(false);
-                        if (!isMyTurn) return;
 
-                        const dropPoint = { x: info.point.x, y: info.point.y };
-                        
-                        // Check collision with Left Zone
-                        if (leftZoneRef.current) {
-                          const rect = leftZoneRef.current.getBoundingClientRect();
-                          // Expand hit area slightly for better UX
-                          const padding = 50; 
-                          if (
-                            dropPoint.x >= rect.left - padding && 
-                            dropPoint.x <= rect.right + padding && 
-                            dropPoint.y >= rect.top - padding && 
-                            dropPoint.y <= rect.bottom + padding
-                          ) {
-                            playPiece(piece, 'left');
-                            setSelectedPiece(null);
-                            return;
-                          }
-                        }
-
-                        // Check collision with Right Zone
-                        if (rightZoneRef.current) {
-                          const rect = rightZoneRef.current.getBoundingClientRect();
-                          const padding = 50;
-                          if (
-                            dropPoint.x >= rect.left - padding && 
-                            dropPoint.x <= rect.right + padding && 
-                            dropPoint.y >= rect.top - padding && 
-                            dropPoint.y <= rect.bottom + padding
-                          ) {
-                            playPiece(piece, 'right');
-                            setSelectedPiece(null);
-                            return;
-                          }
-                        }
-                      }}
-                      className={cn(
-                        "relative flex-shrink-0 touch-none transition-all duration-300 cursor-pointer", 
-                        isMyTurn ? "brightness-125 drop-shadow-[0_0_15px_rgba(240,208,160,0.6)] scale-105 ring-2 ring-[#f0d0a0]/50" : "opacity-50 cursor-not-allowed grayscale scale-95",
-                        selectedPiece === piece && "ring-4 ring-green-500 -translate-y-4 z-50" // Visual feedback for selection
-                      )}
-                      style={{ zIndex: (isDragging || selectedPiece === piece) ? 50 : 1 }}
-                    >
-                      {renderPiece(piece, false, 'vertical')}
-                    </motion.div>
+                            if (fitsLeft && !fitsRight) {
+                              playPiece(piece, 'left');
+                            } else if (fitsRight && !fitsLeft) {
+                              playPiece(piece, 'right');
+                            } else if (fitsLeft && fitsRight) {
+                              setSelectedPiece(selectedPiece === piece ? null : piece);
+                            }
+                          }}
+                          className={cn(
+                            "relative flex-shrink-0 touch-none transition-all duration-300", 
+                            isMyTurn && canPlayThis 
+                              ? "brightness-110 drop-shadow-[0_8px_16px_rgba(0,0,0,0.4)] scale-105 z-10 cursor-pointer" 
+                              : "opacity-40 grayscale-[0.5] scale-95 cursor-not-allowed",
+                            selectedPiece === piece && "ring-4 ring-yellow-400 -translate-y-6 z-50 shadow-[0_20px_40px_rgba(0,0,0,0.6)]"
+                          )}
+                        >
+                          {isMyTurn && canPlayThis && (
+                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-slate-900 z-20 animate-pulse" />
+                          )}
+                          {renderPiece(piece, false, 'vertical')}
+                        </motion.div>
+                      );
                   ); })}
                 </div>
               </div>
