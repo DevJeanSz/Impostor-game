@@ -123,52 +123,38 @@ export function DominoGame({ onBack }: DominoGameProps) {
       const piece = pieces[i];
       const isDouble = piece.piece.left === piece.piece.right;
       
-      // Orientação visual baseada na direção do fluxo
-      let rotation = 0;
-      let orientation: 'vertical' | 'horizontal' = 'horizontal';
-
-      if (isDouble) {
-        orientation = 'vertical'; // Carroças sempre verticais na linha de jogo
-        rotation = 0;
-      } else {
-        orientation = 'horizontal';
-        rotation = curDir === 1 ? 0 : 180;
-      }
+      // No board fixo: normal é horizontal (90x45), double é vertical (45x90)
+      const orientation = isDouble ? 'vertical' : 'horizontal';
+      const visualWidth = isDouble ? PH : PW; // PH=45, PW=90
 
       tempLayout.push({
         ...piece,
         x: curX,
         y: curY,
-        rotation,
+        rotation: 0, 
         orientation,
         isDouble
       });
 
-      // Bounds
-      minX = Math.min(minX, curX - PW);
-      maxX = Math.max(maxX, curX + PW);
-      minY = Math.min(minY, curY - PW);
-      maxY = Math.max(maxY, curY + PW);
+      // Bounds para centralização
+      minX = Math.min(minX, curX - PW/2);
+      maxX = Math.max(maxX, curX + PW/2);
+      minY = Math.min(minY, curY - PW/2);
+      maxY = Math.max(maxY, curY + PW/2);
 
       // Calcular posição da PRÓXIMA peça
       const nextPiece = pieces[i+1];
       if (nextPiece) {
         const nextIsDouble = nextPiece.piece.left === nextPiece.piece.right;
-        
-        // Espaçamento Inteligente:
-        // Se a atual é double e vertical, ela ocupa PH de largura.
-        // Se a atual é normal e horizontal, ela ocupa PW de largura.
-        const currentVisualWidth = isDouble ? PH : PW;
         const nextVisualWidth = nextIsDouble ? PH : PW;
         
-        const step = (currentVisualWidth / 2) + (nextVisualWidth / 2) + G;
+        // Distância perfeita entre centros
+        const step = (visualWidth / 2) + (nextVisualWidth / 2) + G;
 
-        // Verificar se precisa virar (limite da largura)
-        const predictedX = curX + (curDir * step);
-        if (Math.abs(predictedX) > maxRowWidth / 2) {
-          curY += PW + G;
+        // Lógica de "Snake" (curva)
+        if (Math.abs(curX + curDir * step) > maxRowWidth / 2) {
+          curY += PW + G; // Desce uma "carreira"
           curDir *= -1;
-          // Quando vira, o step é diferente
         } else {
           curX += curDir * step;
         }
@@ -947,6 +933,15 @@ export function DominoGame({ onBack }: DominoGameProps) {
   // 3 4 5
   // 6 7 8
   const renderDots = (value: number, isSmall = false) => {
+    const dotColors: Record<number, string> = {
+      1: "#f59e0b", // Amber
+      2: "#ef4444", // Red
+      3: "#10b981", // Emerald
+      4: "#3b82f6", // Blue
+      5: "#06b6d4", // Cyan
+      6: "#8b5cf6", // Violet
+    };
+
     const positions: Record<number, number[]> = {
       0: [],
       1: [4],
@@ -958,19 +953,22 @@ export function DominoGame({ onBack }: DominoGameProps) {
     };
 
     const dotIndices = positions[value] || [];
+    const color = dotColors[value] || "#1e293b";
 
     return (
-      <div className="grid grid-cols-3 grid-rows-3 w-full h-full p-[15%] gap-[1px]">
+      <div className="grid grid-cols-3 grid-rows-3 w-full h-full p-[16%] gap-[1.5px]">
         {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => (
           <div key={i} className="flex items-center justify-center">
             {dotIndices.includes(i) && (
               <motion.div 
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
+                style={{ backgroundColor: color }}
                 className={cn(
-                "rounded-full bg-slate-900 shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),0_1px_1px_rgba(0,0,0,0.3)]",
-                isSmall ? "w-1.5 h-1.5" : "w-3 h-3 md:w-4 md:h-4"
-              )} />
+                  "rounded-full shadow-sm",
+                  isSmall ? "w-2.5 h-2.5" : "w-3.5 h-3.5 md:w-5 md:h-5"
+                )} 
+              />
             )}
           </div>
         ))}
@@ -981,46 +979,40 @@ export function DominoGame({ onBack }: DominoGameProps) {
   const renderPiece = (piece: DominoPiece, isSmall = false, orientation: 'vertical' | 'horizontal' = 'vertical') => {
     const isHorizontal = orientation === 'horizontal';
     
-    // Dimensões baseadas na escala elite
-    const w = isSmall ? 70 : 84;
-    const h = isSmall ? 35 : 42;
+    // Proporções áureas (100x50 ou 70x35)
+    const w = isSmall ? 70 : 100;
+    const h = isSmall ? 35 : 50;
     
-    const inlineStyle = {
-      width: isHorizontal ? w : h,
-      height: isHorizontal ? h : w,
-    };
-
     return (
       <div 
         className={cn(
-          "relative rounded-[6px] flex items-center justify-between select-none overflow-hidden transition-all duration-300",
-          "bg-gradient-to-br from-[#f8f5f0] via-[#ffffff] to-[#e8e4da]",
-          "shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_-1px_0_rgba(0,0,0,0.1)_inset,0_4px_8px_rgba(0,0,0,0.3),0_10px_20px_rgba(0,0,0,0.15)]",
+          "relative rounded-md flex items-center justify-between select-none overflow-hidden transition-all duration-300",
+          "bg-[#fcfaf5] border border-black/15 shadow-md",
           isHorizontal ? "flex-row" : "flex-col"
         )}
-        style={inlineStyle}
+        style={{ 
+          width: isHorizontal ? w : h, 
+          height: isHorizontal ? h : w 
+        }}
       >
-        {/* Camada de brilho/profundidade */}
-        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent pointer-events-none" />
+        {/* Ivory Gloss Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-black/5 pointer-events-none" />
         
-        {/* Metade 1 */}
-        <div className="flex-1 w-full h-full flex items-center justify-center relative p-1.5">
+        <div className="flex-1 w-full h-full flex items-center justify-center relative p-1">
           {renderDots(piece.left, isSmall)}
         </div>
         
-        {/* Divisor Central (Entalhado) */}
         <div className={cn(
-          "bg-black/10 shadow-[inset_0.5px_0.5px_1px_rgba(0,0,0,0.2)]", 
-          isHorizontal ? "w-[1.5px] h-[80%]" : "w-[80%] h-[1.5px]"
+          "bg-black/10 shadow-[inset_0.5px_0.5px_1px_rgba(0,0,0,0.1)]", 
+          isHorizontal ? "w-[1.5px] h-[85%]" : "w-[85%] h-[1.5px]"
         )} />
         
-        {/* Metade 2 */}
-        <div className="flex-1 w-full h-full flex items-center justify-center relative p-1.5">
+        <div className="flex-1 w-full h-full flex items-center justify-center relative p-1">
           {renderDots(piece.right, isSmall)}
         </div>
 
-        {/* Pinagem Central (Visual) */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-gradient-to-br from-slate-400 to-slate-600 rounded-full shadow-sm opacity-60 z-10" />
+        {/* Central Brass Pin */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-gradient-to-br from-slate-400 to-slate-600 rounded-full shadow-sm opacity-40 z-10" />
       </div>
     );
   };
@@ -1459,7 +1451,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                     <div className="flex gap-2">
                       {canBuy ? (
                         <button 
-                          onClick={buyPiece}
+                          onClick={() => buyPiece()}
                           className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2 px-4 rounded-full shadow-lg flex items-center gap-2 animate-bounce"
                         >
                           <PlusCircle size={16} />
@@ -1467,7 +1459,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                         </button>
                       ) : (
                         <button 
-                          onClick={passTurn}
+                          onClick={() => passTurn()}
                           className="bg-red-600 hover:bg-red-500 text-white text-xs font-bold py-2 px-4 rounded-full shadow-lg flex items-center gap-2"
                         >
                           <SkipForward size={16} />
@@ -1516,15 +1508,15 @@ export function DominoGame({ onBack }: DominoGameProps) {
                             }
                           }}
                           className={cn(
-                            "relative flex-shrink-0 touch-none transition-all duration-300", 
+                            "relative flex-shrink-0 touch-none transition-all duration-500", 
                             isMyTurn && canPlayThis 
-                              ? "brightness-110 drop-shadow-[0_8px_16px_rgba(0,0,0,0.4)] scale-105 z-10 cursor-pointer" 
-                              : "opacity-40 grayscale-[0.5] scale-95 cursor-not-allowed",
-                            selectedPiece === piece && "ring-4 ring-yellow-400 -translate-y-6 z-50 shadow-[0_20px_40px_rgba(0,0,0,0.6)]"
+                              ? "brightness-125 drop-shadow-[0_15px_30px_rgba(0,0,0,0.5)] scale-110 z-10 cursor-pointer" 
+                              : "opacity-30 grayscale-[0.8] scale-90 cursor-not-allowed",
+                            selectedPiece === piece && "ring-4 ring-yellow-400 -translate-y-12 z-50 shadow-[0_30px_60px_rgba(0,0,0,0.8)]"
                           )}
                         >
                           {isMyTurn && canPlayThis && (
-                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-slate-900 z-20 animate-pulse" />
+                            <div className="absolute inset-0 bg-green-400/10 rounded-lg animate-pulse pointer-events-none ring-2 ring-green-400/50" />
                           )}
                           {renderPiece(piece, false, 'vertical')}
                         </motion.div>
