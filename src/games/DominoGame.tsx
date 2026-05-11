@@ -959,7 +959,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                 animate={{ scale: 1 }}
                 className={cn(
                 "rounded-full bg-slate-900 shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),0_1px_1px_rgba(0,0,0,0.3)]",
-                isSmall ? "w-1.5 h-1.5" : "w-3 h-3 md:w-4 md:h-4"
+                isSmall ? "w-2.5 h-2.5" : "w-3 h-3 md:w-4 md:h-4"
               )} />
             )}
           </div>
@@ -1374,7 +1374,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                               className="absolute origin-center"
                               style={item.style}
                             >
-                              {renderPiece(item.piece, true, 'vertical')}
+                              {renderPiece(item.piece, true, 'horizontal')}
                             </motion.div>
                           );
                        })}
