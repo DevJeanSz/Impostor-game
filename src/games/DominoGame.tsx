@@ -123,11 +123,11 @@ export function DominoGame({ onBack }: DominoGameProps) {
       const piece = pieces[i];
       const isDouble = piece.piece.left === piece.piece.right;
       
-      // Check if we need to turn
-      // Predicted position if we continue this way
-      const step = isDouble ? PH : PW;
-      const predictedX = curX + (curDir * step);
+      // A largura visual na linha de jogo muda se for double (que fica de pé)
+      const visualWidth = isDouble ? PH : PW;
       
+      // Verifica se precisa virar (curva do snake)
+      const predictedX = curX + (curDir * visualWidth);
       let isTurnPiece = false;
       if (i > 0 && ((curDir === 1 && predictedX > maxRowWidth/2) || (curDir === -1 && predictedX < -maxRowWidth/2))) {
         isTurnPiece = true;
@@ -136,8 +136,8 @@ export function DominoGame({ onBack }: DominoGameProps) {
       let rotation = 0;
       if (isTurnPiece) {
         rotation = 90;
-        // Don't change curX, move curY down
       } else {
+        // Doubles sempre ficam a 90 graus da linha de jogo
         rotation = isDouble ? 90 : (curDir === 1 ? 0 : 180);
       }
 
@@ -150,18 +150,27 @@ export function DominoGame({ onBack }: DominoGameProps) {
         isTurnPiece
       });
 
-      // Update bounds for normalization
+      // Bounds
       minX = Math.min(minX, curX - PW);
       maxX = Math.max(maxX, curX + PW);
       minY = Math.min(minY, curY - PW);
       maxY = Math.max(maxY, curY + PW);
 
-      // Prepare for next piece
+      // Calcular posição da PRÓXIMA peça
       if (isTurnPiece) {
         curY += PW + G;
         curDir *= -1;
       } else {
-        curX += curDir * (isDouble ? PH + G : PW + G);
+        // Distância entre centros depende do tipo da peça atual e da próxima
+        const nextPiece = pieces[i+1];
+        const nextIsDouble = nextPiece?.piece.left === nextPiece?.piece.right;
+        
+        // Espaçamento matemático perfeito: metade da largura atual + metade da próxima
+        const currentHalf = (isDouble ? PH : PW) / 2;
+        const nextHalf = (nextIsDouble ? PH : PW) / 2;
+        const step = currentHalf + nextHalf + G;
+        
+        curX += curDir * step;
       }
     }
     
@@ -959,7 +968,7 @@ export function DominoGame({ onBack }: DominoGameProps) {
                 animate={{ scale: 1 }}
                 className={cn(
                 "rounded-full bg-slate-900 shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),0_1px_1px_rgba(0,0,0,0.3)]",
-                isSmall ? "w-2.5 h-2.5" : "w-3 h-3 md:w-4 md:h-4"
+                isSmall ? "w-1.5 h-1.5" : "w-3 h-3 md:w-4 md:h-4"
               )} />
             )}
           </div>
@@ -975,10 +984,10 @@ export function DominoGame({ onBack }: DominoGameProps) {
     let inlineStyle = {};
     
     if (isSmall) {
-      // Peças do tabuleiro: proporção 2:1 igual a um dominó real (não quadrado!)
+      // Proporção 2:1 exata para as peças do tabuleiro
       inlineStyle = {
-        width: PIECE_WIDTH,   // 80px — comprimento do dominó
-        height: PIECE_HEIGHT  // 40px — largura do dominó
+        width: 70,  
+        height: 35
       };
     } else {
       sizeClass = isHorizontal
